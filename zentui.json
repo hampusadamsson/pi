@@ -100,8 +100,8 @@
         "starship": {
           "format": "",
           "responsive": true,
-          "compactFormat": "$cwd$wrap(in $session_name)$wrap(on $git_branch) $git_status$wrap$context$wrap_sep$tokens",
-          "compactMaxLines": 2,
+          "compactFormat": "$cwd$wrap(in $session_name)$wrap(on $git_branch) $git_status$wrap$context$wrap_sep$tokens$wrap_sep$cost$wrap_sep$extensions",
+          "compactMaxLines": 3,
           "separator": "pipe",
           "contextStyle": "text",
           "contextThresholds": {

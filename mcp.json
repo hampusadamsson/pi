@@ -1,0 +1,21 @@
+{
+  "mcpServers": {
+    "atlassian": {
+      "command": "uvx",
+      "args": [
+        "--with",
+        "atlassian-python-api==4.0.7",
+        "mcp-atlassian"
+      ],
+      "env": {
+        "CONFLUENCE_URL": "https://schibstedio.atlassian.net/wiki",
+        "CONFLUENCE_USERNAME": "hampus.adamsson@m10s.io",
+        "CONFLUENCE_API_TOKEN": "${ATLASSIAN_API_TOKEN}",
+        "JIRA_URL": "https://schibstedio.atlassian.net",
+        "JIRA_USERNAME": "hampus.adamsson@m10s.io",
+        "JIRA_API_TOKEN": "${ATLASSIAN_API_TOKEN}",
+        "JIRA_PROJECTS_FILTER": "DATA"
+      }
+    }
+  }
+}

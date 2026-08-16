@@ -1,0 +1,42 @@
+{
+  "enabled": true,
+  "allowBrowserProcess": true,
+  "network": {
+    "allowLocalBinding": true,
+    "allowAllUnixSockets": true,
+    "allowedDomains": [
+      "*github.com",
+      "*ghe.com",
+      "*atlassian.net",
+      "*atlassian.com",
+      "*lendo.dev",
+      "*lendo.se",
+      "*.github.com"
+    ],
+    "deniedDomains": []
+  },
+  "filesystem": {
+    "denyRead": [
+      ".env",
+      ".pem",
+      "/Users",
+      "/home"
+    ],
+    "allowRead": [
+      ".",
+      "~/.config",
+      "~/.local",
+      "Library"
+    ],
+    "allowWrite": [
+      ".",
+      "/tmp"
+    ],
+    "denyWrite": [
+      ".env",
+      ".env.*",
+      "*.pem",
+      "*.key"
+    ]
+  }
+}

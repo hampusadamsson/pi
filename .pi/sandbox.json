@@ -1,0 +1,12 @@
+{
+  "filesystem": {
+    "allowRead": [
+      "/opt/homebrew/lib/node_modules/@earendil-works/pi-coding-agent/docs/extensions.md",
+      "/opt/homebrew/lib/node_modules/@earendil-works/pi-coding-agent/examples/extensions/echo-system-prompt.ts",
+      "/opt/homebrew/lib/node_modules/@earendil-works/pi-coding-agent/examples/extensions/overlay-test.ts"
+    ],
+    "allowWrite": [
+      "/tmp/roles-smoke.mjs"
+    ]
+  }
+}

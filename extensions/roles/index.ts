@@ -4,7 +4,7 @@
  * Role = named bundle of { model, thinkingLevel, system prompt, tools, skills, context files }.
  *
  * Config (JSON, merged in this order — later wins per role):
- *   ~/.pi/agent/roles/roles.json          { "active": "coder", "keys": {...}, "roles": { ... } }
+ *   ~/.pi/agent/roles.json                { "active": "coder", "keys": {...}, "roles": { ... } }
  *   ~/.pi/agent/roles/<name>.json         single role, name = filename
  *   <cwd>/.pi/roles.json                  project-local (only when project is trusted)
  *   <cwd>/.pi/roles/<name>.json           project-local single role
@@ -166,12 +166,12 @@ function mergeRoleDir(target: LoadedConfig, dir: string): void {
 function loadConfig(ctx: ExtensionContext): LoadedConfig {
 	const config: LoadedConfig = { roles: {}, baseDirs: {}, diagnostics: [] };
 
-	const globalDir = globalRolesDir();
-	const globalFile = join(globalDir, "roles.json");
+	const agentDir = getAgentDir();
+	const globalFile = join(agentDir, "roles.json");
 	if (existsSync(globalFile)) {
-		mergeRolesFile(config, globalFile, globalDir, readJson(globalFile, config.diagnostics));
+		mergeRolesFile(config, globalFile, agentDir, readJson(globalFile, config.diagnostics));
 	}
-	mergeRoleDir(config, globalDir);
+	mergeRoleDir(config, globalRolesDir());
 
 	if (ctx.isProjectTrusted()) {
 		const projectDir = join(ctx.cwd, CONFIG_DIR_NAME);
@@ -190,7 +190,7 @@ function loadConfig(ctx: ExtensionContext): LoadedConfig {
  * so cycle keys are read from the global roles.json only, synchronously.
  */
 function loadCycleKeys(): { next: string[]; previous: string[] } {
-	const path = join(globalRolesDir(), "roles.json");
+	const path = join(getAgentDir(), "roles.json");
 	let keys: CycleKeys | undefined;
 	if (existsSync(path)) {
 		try {
@@ -511,7 +511,7 @@ export default function (pi: ExtensionAPI) {
 			// No arg — show picker
 			const names = visibleRoles();
 			if (names.length === 0) {
-				ctx.ui.notify("No roles configured. Create ~/.pi/agent/roles/roles.json", "warning");
+				ctx.ui.notify("No roles configured. Create ~/.pi/agent/roles.json", "warning");
 				return;
 			}
 			const labels = names.map((name) => {

@@ -1,0 +1,77 @@
+{
+  "active": "work",
+  "roles": {
+    "work": {
+      "description": "Senior full-stack dev, writes and tests code",
+      "model": "anthropic-vertex/claude-sonnet-5",
+      "thinkingLevel": "medium",
+      "systemPrompt": "You are a senior full-stack developer focused on writing clean, tested code. Prefer small, verifiable changes. Run tests after edits.",
+      "promptMode": "append",
+      "tools": {
+        "allow": [
+          "edit",
+          "write",
+          "hypa_read",
+          "hypa_grep",
+          "hypa_shell",
+          "hypa_find",
+          "hypa_ls"
+        ],
+        "deny": []
+      },
+      "skills": []
+    },
+    "private": {
+      "description": "DS4",
+      "model": "opencode-go/deepseek-v4-pro",
+      "tools": {
+        "allow": [
+          "edit",
+          "write",
+          "hypa_read",
+          "hypa_grep",
+          "hypa_shell",
+          "hypa_find",
+          "hypa_ls"
+        ]
+      },
+      "skills": [],
+      "hidden": false
+    },
+    "tickets": {
+      "description": "Jira and ticket manager",
+      "model": "anthropic-vertex/claude-haiku-4-5",
+      "promptMode": "append",
+      "systemPromptFile": "prompts/tickets.md",
+      "tools": {
+        "allow": [
+          "mcp*"
+        ]
+      },
+      "skills": [],
+      "hidden": false
+    },
+    "obsidian": {
+      "description": "Obsidian knowledge base librarian — read freely, ask before write/delete/modify",
+      "thinkingLevel": "medium",
+      "promptMode": "append",
+      "systemPromptFile": "prompts/obsidian.md",
+      "tools": {
+        "allow": [
+          "edit",
+          "write",
+          "hypa_read",
+          "hypa_grep",
+          "hypa_shell",
+          "hypa_find",
+          "hypa_ls"
+        ],
+        "deny": []
+      },
+      "skills": [
+        "obsidian-knowledge"
+      ],
+      "hidden": false
+    }
+  }
+}

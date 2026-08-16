@@ -9,10 +9,11 @@
  */
 
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
-import { readFileSync, existsSync } from "node:fs";
+import { readFileSync, existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { randomBytes } from "node:crypto";
 import {
+  CONFIG_DIR_NAME,
   getAgentDir,
   SessionManager,
   type ExtensionAPI,
@@ -79,6 +80,8 @@ interface WebUiState {
   tokensTotal: number;
   transcript: MsgView[];
   busy: boolean;
+  role: string | null;
+  handler: ((req: IncomingMessage, res: ServerResponse) => void) | null;
   seq: number;
 }
 
@@ -112,6 +115,8 @@ function getState(): WebUiState {
       tokensTotal: 0,
       transcript: [],
       busy: false,
+      role: null,
+      handler: null,
       seq: 0,
     } satisfies WebUiState;
   }
@@ -328,6 +333,7 @@ function buildState(state: WebUiState) {
     costTotal: state.costTotal,
     tokensTotal: state.tokensTotal,
     busy: state.busy,
+    role: state.role,
     port: state.port,
   };
 }
@@ -379,6 +385,7 @@ function refreshFromSession(state: WebUiState) {
   state.costTotal = computeCost(entries);
   state.tokensTotal = computeTokens(entries);
   state.contextUsage = ctx.getContextUsage() ?? state.contextUsage;
+  state.role = activeRoleFromSession(ctx);
 }
 
 // ---------------------------------------------------------------------------
@@ -393,9 +400,14 @@ function json(res: ServerResponse, code: number, obj: unknown) {
 function readBody(req: IncomingMessage): Promise<any> {
   return new Promise((resolve, reject) => {
     let data = "";
+    let tooLarge = false;
     req.on("data", (c) => {
+      if (tooLarge) return;
       data += c;
-      if (data.length > 2_000_000) req.destroy();
+      if (data.length > 2_000_000) {
+        tooLarge = true;
+        req.destroy();
+      }
     });
     req.on("end", () => {
       try {
@@ -509,6 +521,88 @@ function readSession(path: string) {
 }
 
 // ---------------------------------------------------------------------------
+// Roles (reads the roles extension's config; switching goes through /role)
+// ---------------------------------------------------------------------------
+
+interface RoleView {
+  name: string;
+  description?: string;
+  hidden?: boolean;
+}
+
+function readJsonSafe(path: string): unknown {
+  try {
+    return JSON.parse(readFileSync(path, "utf8"));
+  } catch {
+    return undefined;
+  }
+}
+
+function mergeRoleEntries(target: Map<string, RoleView>, raw: unknown): void {
+  if (!raw || typeof raw !== "object") return;
+  const roles = (raw as any).roles;
+  if (!roles || typeof roles !== "object") return;
+  for (const [name, role] of Object.entries(roles)) {
+    if (!role || typeof role !== "object") continue;
+    const prev = target.get(name) ?? { name };
+    target.set(name, {
+      name,
+      description: typeof (role as any).description === "string" ? (role as any).description : prev.description,
+      hidden: typeof (role as any).hidden === "boolean" ? (role as any).hidden : prev.hidden,
+    });
+  }
+}
+
+function readRoleDir(dir: string, target: Map<string, RoleView>): void {
+  if (!existsSync(dir)) return;
+  let files: string[];
+  try {
+    files = readdirSync(dir).filter((f) => f.endsWith(".json") && f !== "roles.json");
+  } catch {
+    return;
+  }
+  for (const file of files.sort()) {
+    const raw = readJsonSafe(join(dir, file));
+    if (!raw || typeof raw !== "object") continue;
+    const name = file.slice(0, -".json".length);
+    target.set(name, {
+      name,
+      description: typeof (raw as any).description === "string" ? (raw as any).description : undefined,
+      hidden: typeof (raw as any).hidden === "boolean" ? (raw as any).hidden : undefined,
+    });
+  }
+}
+
+function activeRoleFromSession(ctx: ExtensionContext | null): string | null {
+  if (!ctx) return null;
+  try {
+    let active: string | null = null;
+    for (const entry of ctx.sessionManager.getBranch() as any[]) {
+      if (entry?.type === "custom" && entry?.customType === "role-switch") {
+        const role = entry?.data?.role;
+        active = role == null ? null : role;
+      }
+    }
+    return active;
+  } catch {
+    return null;
+  }
+}
+
+function loadRoles(ctx: ExtensionContext | null): { roles: RoleView[]; active: string | null } {
+  const map = new Map<string, RoleView>();
+  const agentDir = getAgentDir();
+  mergeRoleEntries(map, readJsonSafe(join(agentDir, "roles.json")));
+  readRoleDir(join(agentDir, "roles"), map);
+  if (ctx && typeof ctx.isProjectTrusted === "function" && ctx.isProjectTrusted()) {
+    const projectDir = join(ctx.cwd, CONFIG_DIR_NAME);
+    mergeRoleEntries(map, readJsonSafe(join(projectDir, "roles.json")));
+    readRoleDir(join(projectDir, "roles"), map);
+  }
+  return { roles: [...map.values()], active: activeRoleFromSession(ctx) };
+}
+
+// ---------------------------------------------------------------------------
 // Slash commands (web-ui side)
 // ---------------------------------------------------------------------------
 
@@ -617,12 +711,13 @@ async function handleSlashCommand(
 }
 
 async function handleApi(state: WebUiState, req: IncomingMessage, res: ServerResponse, url: URL) {
-  if (!authorized(state, url, req)) {
-    json(res, 403, { error: "forbidden" });
-    return;
-  }
+  try {
+    if (!authorized(state, url, req)) {
+      json(res, 403, { error: "forbidden" });
+      return;
+    }
 
-  const path = url.pathname;
+    const path = url.pathname;
 
   if (path === "/api/state" && req.method === "GET") {
     json(res, 200, { state: buildState(state), transcript: state.transcript });
@@ -681,6 +776,25 @@ async function handleApi(state: WebUiState, req: IncomingMessage, res: ServerRes
     return;
   }
 
+  if (path === "/api/roles" && req.method === "GET") {
+    json(res, 200, loadRoles(state.ctx));
+    return;
+  }
+
+  if (path === "/api/complete" && req.method === "GET") {
+    const command = url.searchParams.get("command") ?? "";
+    const prefix = (url.searchParams.get("prefix") ?? "").toLowerCase();
+    let completions: string[] = [];
+    if (command === "role") {
+      const { roles } = loadRoles(state.ctx);
+      completions = ["none", "reload", "keys", ...roles.map((r) => r.name)].filter((c) =>
+        c.toLowerCase().startsWith(prefix),
+      );
+    }
+    json(res, 200, { completions });
+    return;
+  }
+
   // --- Mutating routes ---
 
   if (path === "/api/chat" && req.method === "POST") {
@@ -704,6 +818,10 @@ async function handleApi(state: WebUiState, req: IncomingMessage, res: ServerRes
       }
       json(res, 200, { ok: true });
     } catch (e: any) {
+      if (e?.message === "agent busy") {
+        json(res, 409, { error: "agent busy" });
+        return;
+      }
       json(res, 500, { error: e?.message ?? String(e) });
     }
     return;
@@ -791,6 +909,25 @@ async function handleApi(state: WebUiState, req: IncomingMessage, res: ServerRes
     return;
   }
 
+  if (path === "/api/role" && req.method === "POST") {
+    const body = await readBody(req);
+    const name = typeof body?.name === "string" ? body.name.trim() : null;
+    if (state.busy) {
+      json(res, 409, { error: "agent busy" });
+      return;
+    }
+    if (name) {
+      state.pi!.sendUserMessage(`/role ${name}`, { expandPromptTemplates: true });
+      state.role = name;
+    } else {
+      state.pi!.sendUserMessage("/role none", { expandPromptTemplates: true });
+      state.role = null;
+    }
+    pushState(state);
+    json(res, 200, { ok: true, role: state.role });
+    return;
+  }
+
   if (path === "/api/themes" && req.method === "GET") {
     try {
       const themes = state.ctx?.ui?.getAllThemes?.() ?? [];
@@ -845,7 +982,10 @@ async function handleApi(state: WebUiState, req: IncomingMessage, res: ServerRes
     return;
   }
 
-  json(res, 404, { error: "not found" });
+    json(res, 404, { error: "not found" });
+  } catch (e: any) {
+    if (!res.headersSent) json(res, 500, { error: e?.message ?? String(e) });
+  }
 }
 
 function createHandler(state: WebUiState) {
@@ -873,7 +1013,17 @@ function createHandler(state: WebUiState) {
 }
 
 function startServer(state: WebUiState) {
-  const server = createServer(createHandler(state));
+  // Route dispatch goes through state.handler so an extension reload can swap in
+  // a fresh handleApi closure without restarting the listening socket.
+  const server = createServer((req, res) => {
+    const h = state.handler;
+    if (h) {
+      h(req, res);
+    } else {
+      res.writeHead(503, { "Content-Type": "application/json; charset=utf-8" });
+      res.end(JSON.stringify({ error: "starting" }));
+    }
+  });
   state.server = server;
   server.on("error", (err: any) => {
     if (state.ctx?.hasUI) {
@@ -904,6 +1054,14 @@ function startServer(state: WebUiState) {
 export default function (pi: ExtensionAPI) {
   const state = getState();
   state.pi = pi;
+  state.handler = createHandler(state);
+
+  // On extension reload the singleton survives but the transcript was wiped
+  // while no session_start re-fired. Reseed from the live session if present.
+  if (state.ctx) {
+    refreshFromSession(state);
+    broadcast(state, "session", { state: buildState(state), transcript: state.transcript });
+  }
 
   // Session control commands (dispatched from the web UI).
   pi.registerCommand("webui:new", {
@@ -990,14 +1148,13 @@ export default function (pi: ExtensionAPI) {
 
   pi.on("tool_execution_update", (event, ctx) => {
     state.ctx = ctx;
-    const text = extractText(event.partialResult);
-    if (!text) return;
+    const output = extractText(event.partialResult);
     const last = lastAssistant(state);
     const tc = last?.toolCalls?.find((t) => t.id === event.toolCallId);
     if (tc) {
-      tc.output = (tc.output ?? "") + text;
+      tc.output = output;
       tc.status = "running";
-      broadcast(state, "tool_progress", { id: event.toolCallId, text });
+      broadcast(state, "tool_progress", { id: event.toolCallId, output });
     }
   });
 
@@ -1060,6 +1217,7 @@ export default function (pi: ExtensionAPI) {
   pi.on("agent_settled", (_event, ctx) => {
     state.ctx = ctx;
     state.busy = false;
+    state.role = activeRoleFromSession(ctx);
     updateUsageAndContext(state);
     pushState(state);
   });

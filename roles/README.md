@@ -6,7 +6,7 @@ Config for the `roles` extension (`~/.pi/agent/extensions/roles/index.ts`).
 
 | Path | Purpose |
 |------|---------|
-| `~/.pi/agent/roles/roles.json` | Global roles + `"active"` default |
+| `~/.pi/agent/roles.json` | Global roles + `"active"` default |
 | `~/.pi/agent/roles/<name>.json` | One role per file (name = filename), merged over `roles.json` |
 | `<project>/.pi/roles.json` | Project-local, wins over global (trusted projects only) |
 | `<project>/.pi/roles/<name>.json` | Project-local single role |
@@ -21,7 +21,7 @@ Merge is per-role shallow merge; later source wins.
   "model": "provider/model-id",       // optional; bare "model-id" also resolved
   "thinkingLevel": "off|minimal|low|medium|high|xhigh|max",
   "systemPrompt": "inline text",
-  "systemPromptFile": "prompts/x.md", // relative to this config dir, or cwd
+  "systemPromptFile": "prompts/x.md", // relative to config file's dir (agent root), or cwd
   "promptMode": "append",             // "append" (default) | "replace"
   "tools": { "allow": ["read", "mcp_*"], "deny": ["bash"] },
   "skills": ["test*"],                // name globs kept in prompt; omit = keep all

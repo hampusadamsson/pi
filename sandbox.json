@@ -26,10 +26,13 @@
       ".",
       "~/.config",
       "~/.local",
+      "/Users/hampus.adamsson/syncthing/default/obsidian/work/0-daily/",
+      "/Users/hampus.adamsson/syncthing/default/obsidian/work/1-wiki/",
       "Library"
     ],
     "allowWrite": [
       ".",
+      "/Users/hampus.adamsson/syncthing/default/obsidian/work/1-wiki/",
       "/tmp"
     ],
     "denyWrite": [

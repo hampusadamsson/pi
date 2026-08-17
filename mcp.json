@@ -1,5 +1,10 @@
 {
   "mcpServers": {
+    "snowflake": {
+      "type": "remote",
+      "url": "https://snowflake-agentic-poc-mcp.data.stage.lendo.dev/mcp",
+      "enabled": true
+    },
     "atlassian": {
       "command": "uvx",
       "args": [

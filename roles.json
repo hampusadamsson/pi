@@ -38,24 +38,11 @@
       "skills": [],
       "hidden": false
     },
-    "tickets": {
-      "description": "Jira and ticket manager",
-      "model": "anthropic-vertex/claude-haiku-4-5",
+    "researcher": {
+      "description": "Research assistant with access to all skills (Jira, Confluence, GitHub, Obsidian, Snowflake)",
+      "model": "anthropic-vertex/claude-sonnet-5",
       "promptMode": "append",
-      "systemPromptFile": "prompts/tickets.md",
-      "tools": {
-        "allow": [
-          "mcp*"
-        ]
-      },
-      "skills": [],
-      "hidden": false
-    },
-    "obsidian": {
-      "description": "Obsidian knowledge base librarian — read freely, ask before write/delete/modify",
-      "thinkingLevel": "medium",
-      "promptMode": "append",
-      "systemPromptFile": "prompts/obsidian.md",
+      "systemPromptFile": "prompts/researcher.md",
       "tools": {
         "allow": [
           "edit",
@@ -65,11 +52,14 @@
           "hypa_shell",
           "hypa_find",
           "hypa_ls"
-        ],
-        "deny": []
+        ]
       },
       "skills": [
-        "obsidian-knowledge"
+        "jira",
+        "confluence",
+        "github",
+        "obsidian",
+        "snowflake"
       ],
       "hidden": false
     }

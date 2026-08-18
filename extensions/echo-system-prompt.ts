@@ -133,6 +133,28 @@ function extractSystemPrompt(payload: unknown): string | null {
 }
 
 /**
+ * Parse skill names from the `<available_skills>` block in a system prompt.
+ * Reflects role `skills` allowlists / `--no-skills` already applied.
+ */
+function extractAvailableSkillNames(prompt: string): string[] {
+  if (!prompt) return [];
+  const open = prompt.indexOf("<available_skills>");
+  if (open === -1) return [];
+  const close = prompt.indexOf("</available_skills>", open);
+  if (close === -1) return [];
+
+  const block = prompt.slice(open, close);
+  const names: string[] = [];
+  const re = /<skill>[\s\S]*?<name>([\s\S]*?)<\/name>[\s\S]*?<\/skill>/g;
+  let match: RegExpExecArray | null;
+  while ((match = re.exec(block)) !== null) {
+    const name = match[1]?.trim();
+    if (name) names.push(name);
+  }
+  return names;
+}
+
+/**
  * Extract all messages from a provider-agnostic payload object.
  * Returns an array of { role, summary, content } for each message.
  */
@@ -245,8 +267,10 @@ export default function echoSystemPrompt(pi: ExtensionAPI) {
   // ----- Persistent right sidebar showing active tools -----
   let sidebarHandle: { hide(): void; unfocus(): void } | null = null;
   let sidebarRequestRender: (() => void) | null = null;
+  let contextSkillNames: string[] | null = null;
 
   pi.on("session_start", (_event, ctx) => {
+    contextSkillNames = null;
     if (ctx.mode !== "tui") return;
 
     void ctx.ui.custom<void>(
@@ -283,19 +307,20 @@ export default function echoSystemPrompt(pi: ExtensionAPI) {
             // Gap between sections
             lines.push(bdr("│"));
 
-            // Skills section
-            const skills = pi.getCommands()
-              .filter(c => c.source === "skill")
-              .sort((a, b) => a.name.localeCompare(b.name));
+            // Skills section — reflect skills actually in the system prompt
+            // (role `skills` allowlists / --no-skills already applied).
+            const skillNames =
+              contextSkillNames ??
+              extractAvailableSkillNames(ctx.getSystemPrompt() ?? "");
+            const skills = [...new Set(skillNames)].sort((a, b) => a.localeCompare(b));
 
             lines.push(
               bdr("│") + truncateToWidth(" " + theme.bold(theme.fg("accent", "Skills")), innerW),
             );
             lines.push(bdr("│" + "─".repeat(innerW)));
 
-            for (const skill of skills) {
-              const displayName = skill.name.startsWith("skill:") ? skill.name.slice(6) : skill.name;
-              lines.push(bdr("│") + truncateToWidth(" " + displayName, innerW));
+            for (const name of skills) {
+              lines.push(bdr("│") + truncateToWidth(" " + name, innerW));
             }
 
             if (skills.length === 0) {
@@ -354,6 +379,10 @@ export default function echoSystemPrompt(pi: ExtensionAPI) {
     const systemPrompt = extracted ?? "";
     const piSystemPrompt = ctx.getSystemPrompt() ?? "";
     const effectivePrompt = systemPrompt || piSystemPrompt;
+
+    // Reflect the final skill list (role allowlists etc. already applied) in the sidebar.
+    contextSkillNames = extractAvailableSkillNames(effectivePrompt);
+    sidebarRequestRender?.();
 
     // 2. Extract all messages
     const allMessages = extractAllMessages(payload);
@@ -686,6 +715,7 @@ export default function echoSystemPrompt(pi: ExtensionAPI) {
     sidebarHandle?.hide();
     sidebarHandle = null;
     sidebarRequestRender = null;
+    contextSkillNames = null;
     ctx.ui.setWidget("sysprompt", undefined);
     ctx.ui.setWidget("payload", undefined);
     ctx.ui.setWidget("tools", undefined);

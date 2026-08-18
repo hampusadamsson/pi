@@ -54,7 +54,7 @@ interface RoleConfig {
 	/** Legacy aliases. */
 	allowedTools?: string[];
 	deniedTools?: string[];
-	/** Skill name globs kept in the system prompt. Omit = keep all. */
+	/** Skill name globs kept in the system prompt. Omit = keep none. */
 	skills?: string[];
 	/** Extra files appended to the system prompt. */
 	contextFiles?: string[];
@@ -84,7 +84,10 @@ interface LoadedConfig {
 
 const ENTRY_TYPE = "role-switch";
 const STATUS_KEY = "role";
-const SKILLS_PREAMBLE = "\n\nThe following skills provide specialized instructions for specific tasks.";
+// Substring-only match (no leading "\n\n"): pi's skill formatter has shipped both
+// with and without a leading blank line before this sentence, so anchoring on the
+// bare sentence text matches either variant instead of silently failing to strip.
+const SKILLS_PREAMBLE = "The following skills provide specialized instructions for specific tasks.";
 const SKILLS_OPEN = "<available_skills>";
 const SKILLS_CLOSE = "</available_skills>";
 
@@ -240,7 +243,7 @@ function findModel(ctx: ExtensionContext, spec: string) {
 }
 
 function filterSkills(prompt: string, patterns: string[] | undefined): string {
-	if (!patterns) return prompt;
+	const allowed = patterns ?? [];
 
 	const open = prompt.indexOf(SKILLS_OPEN);
 	if (open === -1) return prompt;
@@ -252,15 +255,21 @@ function filterSkills(prompt: string, patterns: string[] | undefined): string {
 	const entries = block.match(/[ \t]*<skill>[\s\S]*?<\/skill>/g) ?? [];
 	const kept = entries.filter((entry) => {
 		const name = /<name>([\s\S]*?)<\/name>/.exec(entry)?.[1]?.trim() ?? "";
-		return matchesAny(name, patterns);
+		return matchesAny(name, allowed);
 	});
 
 	if (kept.length === entries.length) return prompt;
 
 	if (kept.length === 0) {
-		const preamble = prompt.lastIndexOf(SKILLS_PREAMBLE, open);
-		const sectionStart = preamble === -1 ? open : preamble;
-		return prompt.slice(0, sectionStart) + prompt.slice(blockEnd);
+		const preambleIdx = prompt.lastIndexOf(SKILLS_PREAMBLE, open);
+		const sectionStart = preambleIdx === -1 ? open : preambleIdx;
+		// Trim whitespace on both sides of the cut so removing the section never leaves
+		// a dangling blank gap or glues unrelated lines together.
+		const before = prompt.slice(0, sectionStart).replace(/\s+$/, "");
+		const after = prompt.slice(blockEnd).replace(/^\s+/, "");
+		if (!before) return after;
+		if (!after) return before;
+		return `${before}\n\n${after}`;
 	}
 
 	const rebuilt = `${SKILLS_OPEN}\n${kept.join("\n")}\n${SKILLS_CLOSE}`;
@@ -400,6 +409,15 @@ export default function (pi: ExtensionAPI) {
 		if (!ctx.isIdle()) {
 			if (ctx.hasUI) ctx.ui.notify("Agent busy — switch roles when idle", "error");
 			return;
+		}
+		// Re-read config files before switching so edits made mid-session (e.g. adding
+		// a `skills` allowlist to a role) take effect immediately instead of applying a
+		// stale snapshot from session start / the last explicit `/role reload`.
+		if (name !== undefined) {
+			config = loadConfig(ctx);
+			if (ctx.hasUI && config.diagnostics.length > 0) {
+				ctx.ui.notify(`roles config: ${config.diagnostics.join(" | ")}`, "warning");
+			}
 		}
 		const ok = await applyRole(name, ctx);
 		if (ok) pi.appendEntry(ENTRY_TYPE, { role: name ?? null });

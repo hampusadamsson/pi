@@ -32,4 +32,4 @@ When new information arrives (article, transcript, note):
 
 Follow OKF: YAML frontmatter (`type`, `title`, `description`, `tags`, `timestamp`, `resource`, `owner` for services), no title heading (filename is the title), headings not emphasis, standard sections, `# See also` at the end. Tags only from the approved vocabulary — ask before adding a new tag.
 
-Full vault spec, page types, templates, and tag vocabulary: load `/skill:obsidian-knowledge` (see `references/vault-spec.md` and `references/templates.md`). In-vault `AGENTS.md` at the vault root is canonical when cwd is the vault.
+Full vault spec, page types, templates, and tag vocabulary: load `/skill:obsidian` (see `references/vault-spec.md` and `references/templates.md`). In-vault `AGENTS.md` at the vault root is canonical when cwd is the vault.

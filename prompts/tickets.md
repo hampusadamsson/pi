@@ -22,6 +22,7 @@ IMPORTANT: Ask for clarification before executing the last step of creating, mod
   * *Good:* "Migrate ml-core to GitHub Actions"
 * **Background:** Exactly 1 paragraph (3–5 sentences, prose only, no bullets).
   * *Flow:* Current state $\rightarrow$ Problem or opportunity $\rightarrow$ Why now.
+  Note that the body is all markdown.
 * **Acceptance Criteria:** Bulleted list (1–5 items max).
   * **Declarative present tense:** "X is Y" (never "do X" or "ensure X").
   * **Verifiable:** A third party can confirm it without asking questions (avoid vague words like "easy" or "well-documented").
@@ -34,10 +35,10 @@ IMPORTANT: Ask for clarification before executing the last step of creating, mod
 ```text
 {{IMPERATIVE_TITLE}}
 
-Background
+# Background
 {{3–5 sentences: current state → problem/opportunity → why now}}
 
-Acceptance Criteria
+# Acceptance Criteria
 - {{SYSTEM_OR_COMPONENT}} is {{OBSERVABLE_STATE}}
 - {{SYSTEM_OR_COMPONENT}} is {{OBSERVABLE_STATE}}
 ```
@@ -52,7 +53,7 @@ Acceptance Criteria
 #### Standard Fields
 
 | Field | Notes |
-|---|---|
+| --- | --- |
 | `summary` | Imperative title |
 | `description` | Background + Acceptance Criteria |
 | `issuetype` | Task / Epic / Bug / Subtask |
@@ -65,7 +66,7 @@ Acceptance Criteria
 #### Custom Fields
 
 | Field ID | Name | Type | Applies to | Usage |
-|---|---|---|---|---|
+| --- | --- | --- | --- | --- |
 | `customfield_12670` | Area | multi-select | Task, Epic | Team/area owning the work (e.g. Platform, Analytics, ML, Infra, Data Eng) |
 | `customfield_12671` | Task type | multi-select | Task, Epic | Nature of work (Feature, Bug, Research, Maintenance, Docs) |
 | `customfield_12704` | Business unit | multi-select | Task, Epic | Business function (Product, Engineering, Data Science, Finance) |
@@ -89,6 +90,7 @@ Note: integration fields (`Development`, `Design`, `Vulnerability`, `Rank`) are 
 Server: [sooperset/mcp-atlassian](https://github.com/sooperset/mcp-atlassian). Tool names below are prefixed `atlassian_jira_*` — call these, never shell/CLI/REST directly.
 
 #### Search (dedupe before creating)
+
 ```
 atlassian_jira_search({
   jql: "project = DATA AND type IN (Epic, Task) AND text ~ \"keyword\"",
@@ -98,6 +100,7 @@ atlassian_jira_search({
 ```
 
 #### Read a ticket
+
 ```
 atlassian_jira_get_issue({
   issue_key: "DATA-1410",
@@ -105,9 +108,11 @@ atlassian_jira_get_issue({
   include: "transitions,comments"   // optional enrichments
 })
 ```
+
 Other read helpers: `atlassian_jira_get_issue_dates`, `atlassian_jira_get_issue_watchers`, `atlassian_jira_get_issue_sla`, `atlassian_jira_get_issue_development_info`.
 
 #### Discover schema before creating
+
 ```
 atlassian_jira_get_project_issue_types({ project_key: "DATA" })
 atlassian_jira_get_create_fields({ project_key: "DATA", issue_type_id: "12197" })   // 12197 = Task, 12198 = Epic
@@ -115,6 +120,7 @@ atlassian_jira_get_field_options({ field_id: "customfield_12873", project_key: "
 ```
 
 #### Create a ticket
+
 ```
 atlassian_jira_create_issue({
   project_key: "DATA",
@@ -131,6 +137,7 @@ atlassian_jira_create_issue({
 ```
 
 #### Update a ticket
+
 ```
 atlassian_jira_update_issue({
   issue_key: "DATA-1410",
@@ -142,13 +149,14 @@ atlassian_jira_update_issue({
 ```
 
 #### Transition status
+
 Use `atlassian_jira_get_issue({ issue_key, include: "transitions" })` to list valid transitions, then `atlassian_jira_transition_issue` (or `update_issue` with `status`) to move it.
 
 #### Other useful tools
-- `atlassian_jira_search_fields` — fuzzy-find a field ID by keyword
-- `atlassian_jira_search_assignable_users` — resolve a name to accountId for `assignee`
-- `atlassian_jira_get_project_epic_hierarchy` — see how Epics roll up
-- `atlassian_jira_search_projects` — confirm project key
+
+* `atlassian_jira_search_fields` — fuzzy-find a field ID by keyword
+* `atlassian_jira_search_assignable_users` — resolve a name to accountId for `assignee`
+* `atlassian_jira_get_project_epic_hierarchy` — see how Epics roll up
+* `atlassian_jira_search_projects` — confirm project key
 
 **Always confirm with the user before the final create/update/delete call.**
-

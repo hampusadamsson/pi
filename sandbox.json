@@ -11,6 +11,7 @@
       "*atlassian.com",
       "*lendo.dev",
       "*lendo.se",
+      "*.ghe.com",
       "*.github.com"
     ],
     "deniedDomains": []

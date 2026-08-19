@@ -2,8 +2,9 @@ FROM node:22-slim
 
 # git: required by pi package manager for git: packages and npm git deps.
 # curl: required by the uv installer below.
+# ripgrep + bubblewrap: required by the pi-sandbox extension (sandbox.json).
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends git ca-certificates curl && \
+    apt-get install -y --no-install-recommends git ca-certificates curl ripgrep bubblewrap && \
     rm -rf /var/lib/apt/lists/*
 
 # uv/uvx: required by MCP servers declared in mcp.json (atlassian uses `uvx`).

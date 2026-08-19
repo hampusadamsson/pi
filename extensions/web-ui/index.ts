@@ -4,8 +4,8 @@
  * Serves an OpenAI/Gemini-style chat interface at http://127.0.0.1:<port>
  * and bridges it to the live pi agent session via Server-Sent Events.
  *
- * Port: PI_WEBUI_PORT (default 4242). Token: PI_WEBUI_TOKEN (default random).
- * Binds 127.0.0.1 only. All /api/* routes require the token.
+ * Port: PI_WEBUI_PORT (default 4242). Host: PI_WEBUI_HOST (default 127.0.0.1).
+ * Token: PI_WEBUI_TOKEN (default random). All /api/* routes require the token.
  */
 
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
@@ -20,7 +20,7 @@ import {
   type ExtensionContext,
 } from "@earendil-works/pi-coding-agent";
 
-const HOST = "127.0.0.1";
+const HOST = process.env.PI_WEBUI_HOST || "127.0.0.1";
 const DEFAULT_PORT = 4242;
 const GLOBAL_KEY = "__pi_webui__";
 

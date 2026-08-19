@@ -40,7 +40,7 @@ Globs support `*` only.
 - `/role <name>` — switch
 - `/role none` — clear role, restore startup tool set
 - `/role reload` — re-read config files
-- `alt+r` — cycle next, `alt+b` (or `shift+alt+r` on Kitty-protocol terminals) — cycle previous
+- `ctrl+h` — cycle next, `shift+ctrl+h` (needs Kitty protocol / modifyOtherKeys) — cycle previous
 - Footer shows `◆ <role>`
 
 ## Semantics

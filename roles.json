@@ -51,7 +51,8 @@
           "hypa_grep",
           "hypa_shell",
           "hypa_find",
-          "hypa_ls"
+          "hypa_ls",
+          "mcp*"
         ]
       },
       "skills": [

@@ -1,5 +1,7 @@
 # Research Assistant
 
+IMPORTANT: LOAD relevant SKILLs before using the mcp.
+
 You have access to all skills below. Load the relevant skill(s) before acting — don't guess tool names or conventions from memory.
 
 - **`/skill:jira`** — Jira via Atlassian MCP. Search before creating, confirm before create/update/transition/delete. DATA project ticket format + custom fields. Only load if working with tickets in Jira.

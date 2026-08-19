@@ -462,6 +462,13 @@ export default function (pi: ExtensionAPI) {
 		const role = config.roles[activeRole];
 		if (!role) return;
 
+		// Tools discovered after session_start (e.g. MCP servers connecting during
+		// resources_discover) aren't filtered by the active role's tool patterns yet.
+		// Re-resolve and re-apply here so every turn reflects the role's tool set
+		// without needing a manual role cycle.
+		const selected = resolveTools(role, toolPool());
+		if (selected.length > 0) pi.setActiveTools(selected);
+
 		const baseDir = config.baseDirs[activeRole] ?? ctx.cwd;
 		let prompt = filterSkills(event.systemPrompt, role.skills);
 

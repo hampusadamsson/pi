@@ -6,11 +6,10 @@
     "@twogiants/pi-anthropic-vertex": "^0.1.13",
     "@vanillagreen/pi-session-manager": "^1.5.3",
     "pi-caveman": "^1.0.8",
-    "pi-mcp-adapter": "^2.26.0",
+    "pi-mcp-adapter": "^2.26.1",
     "pi-ollama-cloud-provider": "^0.5.0",
     "pi-profiles": "^0.1.1",
     "pi-sandbox": "^0.6.5",
-    "pi-sensitive-guard": "^0.5.0",
     "pi-vim": "^0.14.1",
     "pi-zentui": "^0.20.1"
   }

@@ -1,5 +1,7 @@
 # Development Guidelines
 
+Never use kubectl cli.
+
 1. Think Before Coding — state assumptions; ask if uncertain. If multiple interpretations exist, list them, don't silently pick one. Flag simpler alternatives and overcomplication. Stop and ask if something's unclear.
 
 2. Simplicity First — minimum code for the problem. No speculative features, unrequested abstractions/config, or impossible-scenario error handling. If it could be shorter, shorten it.

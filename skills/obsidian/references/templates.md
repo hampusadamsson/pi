@@ -50,10 +50,6 @@ example --run
 | Service | [console / endpoint](url) |
 | Docs | [docs](url) |
 
-# See also
-
-[[related-page]] · [[another-related-page]]
-
 ```
 
 ## tool

@@ -3,7 +3,6 @@
 auth.json
 cache
 sessions
-settings.json
 models-store.json
 mcp-cache.json
 mcp-npx-cache.json

@@ -1,0 +1,21 @@
+{
+  "defaultModel": "deepseek-v4-pro",
+  "defaultProvider": "opencode-go",
+  "lastChangelogVersion": "0.84.2",
+  "packages": [
+    "npm:pi-zentui",
+    "npm:@hypabolic/pi-hypa",
+    "npm:pi-vim",
+    "npm:pi-caveman",
+    "npm:pi-profiles",
+    "npm:pi-sandbox",
+    "npm:pi-ollama-cloud-provider",
+    "git:github.com/kdejaeger/pi-scoped-models-extra-info",
+    "npm:@twogiants/pi-anthropic-vertex",
+    "npm:pi-mcp-adapter",
+    "npm:@vanillagreen/pi-session-manager"
+  ],
+  "theme": "my-theme",
+  "hideThinkingBlock": true,
+  "defaultThinkingLevel": "high"
+}

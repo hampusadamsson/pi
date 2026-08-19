@@ -3,7 +3,6 @@ auth.json
 mcp-oauth/
 models-store.json
 models.json
-settings.json
 
 # Cache
 cache/

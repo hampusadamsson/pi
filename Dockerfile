@@ -41,4 +41,4 @@ ENV OPENCODE_API_KEY=""
 EXPOSE 4242
 
 WORKDIR /workspace
-CMD ["pi"]
+CMD ["pi", "--mode", "rpc"]

@@ -160,6 +160,34 @@
   #rolePop .rp-name { font-weight: 600; }
   #rolePop .rp-desc { font-size: 12px; color: var(--dim); overflow-wrap: anywhere; }
   #rolePop .rp-badge { font-size: 10px; text-transform: uppercase; letter-spacing: .04em; color: var(--warn); }
+  #skillPop {
+    position: fixed; top: 50%; left: 50%;
+    width: min(860px, 94vw); max-height: 86vh;
+    background: var(--panel); border: 1px solid var(--border); border-radius: 16px; z-index: 50;
+    transform: translate(-50%, -50%) scale(.96); opacity: 0; pointer-events: none;
+    transition: transform .18s ease, opacity .18s ease; display: flex; flex-direction: column;
+    box-shadow: 0 24px 64px rgba(0,0,0,.5);
+  }
+  #skillPop.open { transform: translate(-50%, -50%) scale(1); opacity: 1; pointer-events: auto; }
+  #skillPop .sk-body { flex: 1; display: flex; min-height: 0; }
+  #skillPop .sk-list { width: 240px; flex: none; overflow-y: auto; border-right: 1px solid var(--border); padding: 10px; }
+  #skillPop .sk-item {
+    display: block; width: 100%; text-align: left; background: none; border: 1px solid transparent;
+    color: var(--text); padding: 8px 10px; border-radius: 8px; font-size: 13px; margin-bottom: 4px;
+  }
+  #skillPop .sk-item:hover { background: var(--bg2); }
+  #skillPop .sk-item.cur { background: var(--bg2); border-color: var(--accent); }
+  #skillPop .sk-item .sk-name { font-weight: 600; }
+  #skillPop .sk-item .sk-scope { font-size: 10px; text-transform: uppercase; letter-spacing: .04em; color: var(--dim); }
+  #skillPop .sk-editor { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+  #skillPop .sk-editor-head { padding: 10px 16px; font-size: 13px; font-weight: 600; color: var(--dim); border-bottom: 1px solid var(--border); }
+  #skillPop textarea { flex: 1; background: var(--bg3); color: var(--text); border: 0; resize: none; padding: 14px 16px; font-family: var(--mono); font-size: 13px; line-height: 1.5; outline: none; }
+  #skillPop .sk-editor-actions { display: flex; align-items: center; gap: 10px; padding: 10px 16px; border-top: 1px solid var(--border); }
+  #skillPop .sk-path { flex: 1; font-size: 11px; color: var(--dim); font-family: var(--mono); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+  #skillPop .sk-editor-actions button {
+    background: var(--accent); color: #0b0d12; border: 0; border-radius: 8px; padding: 8px 16px; font-weight: 600;
+  }
+  #skillPop .sk-editor-actions button:disabled { opacity: .5; cursor: default; }
   #slashPop {
     position: absolute; bottom: 100%; left: 0; right: 0; z-index: 50;
     background: var(--bg3); border: 1px solid var(--border); border-radius: 10px;
@@ -331,6 +359,9 @@
     #drawer { width: 100%; max-height: 100%; height: 100%; border-radius: 0; }
     #modelPop { width: 100%; max-height: 100%; height: 100%; border-radius: 0; }
     #rolePop { width: 100%; max-height: 100%; height: 100%; border-radius: 0; }
+    #skillPop { width: 100%; max-height: 100%; height: 100%; border-radius: 0; }
+    #skillPop .sk-body { flex-direction: column; }
+    #skillPop .sk-list { width: 100%; flex: none; max-height: 38%; border-right: 0; border-bottom: 1px solid var(--border); }
     .chat-inner { padding: 0 12px; }
     #composer { padding: 6px 10px calc(6px + env(safe-area-inset-bottom)); }
   }
@@ -414,6 +445,20 @@
   <div class="drawer-head">Select role <button id="rolePopClose">✕</button></div>
   <div class="rp-list" id="roleList"></div>
 </div>
+<div id="skillPop">
+  <div class="drawer-head">Edit skills <button id="skillPopClose">✕</button></div>
+  <div class="sk-body">
+    <div class="sk-list" id="skillList"></div>
+    <div class="sk-editor">
+      <div class="sk-editor-head" id="skillEditorTitle">Select a skill</div>
+      <textarea id="skillContent" spellcheck="false" disabled></textarea>
+      <div class="sk-editor-actions">
+        <span class="sk-path" id="skillPath"></span>
+        <button id="skillSave" disabled>Save</button>
+      </div>
+    </div>
+  </div>
+</div>
 <div id="slashPop" class="hidden"></div>
 <div id="overlay" class="hidden"></div>
 <div id="drawer" class="drawer">
@@ -439,6 +484,8 @@ window.PI_PORT = "__PI_WEBUI_PORT__";
   var modelSort = "default";
   var roleList = [];
   var activeRole = null;
+  var skillList = [];
+  var activeSkillPath = null;
   var showThinking = localStorage.getItem("pi_webui_showThinking") === "1";
   if (!showThinking) document.body.classList.add("no-thinking");
 
@@ -721,6 +768,7 @@ window.PI_PORT = "__PI_WEBUI_PORT__";
     rows += '<div class="kv"><div class="k">Actions</div><div class="actions">' +
       '<button id="compactBtn">Compact</button>' +
       '<button id="reloadBtn">Reload</button>' +
+      '<button id="skillsBtn">Skills</button>' +
       '<button id="newSessionBtn">New session</button></div></div>';
 
     b.innerHTML = rows;
@@ -771,6 +819,7 @@ window.PI_PORT = "__PI_WEBUI_PORT__";
       api("POST", "/api/reload", {}).then(function () { closeDrawer(); });
     };
     $("newSessionBtn").onclick = function () { newSession(); closeDrawer(); };
+    $("skillsBtn").onclick = function () { openSkillPop(); };
     loadThemes();
     loadModels();
     loadRoles();
@@ -936,6 +985,65 @@ window.PI_PORT = "__PI_WEBUI_PORT__";
         closeRolePop();
       };
     });
+  }
+
+  function fetchSkills() {
+    return api("GET", "/api/skills").then(function (r) {
+      skillList = r.skills || [];
+      return r;
+    });
+  }
+
+  function clearSkillEditor() {
+    var ta = $("skillContent");
+    ta.value = "";
+    ta.disabled = true;
+    $("skillSave").disabled = true;
+    $("skillPath").textContent = "";
+    $("skillEditorTitle").textContent = "Select a skill";
+  }
+
+  function showSkill(s) {
+    var ta = $("skillContent");
+    ta.value = s.content || "";
+    ta.disabled = false;
+    $("skillSave").disabled = false;
+    $("skillPath").textContent = s.path;
+    $("skillEditorTitle").textContent = s.name;
+  }
+
+  function selectSkill(path) {
+    activeSkillPath = path;
+    var s = null;
+    for (var i = 0; i < skillList.length; i++) if (skillList[i].path === path) { s = skillList[i]; break; }
+    if (s) showSkill(s);
+    renderSkillPop();
+  }
+
+  function renderSkillPop() {
+    var el = $("skillList");
+    if (!el) return;
+    var html = skillList.map(function (s) {
+      var cur = s.path === activeSkillPath ? " cur" : "";
+      return '<button class="sk-item' + cur + '" data-path="' + esc(s.path) + '">' +
+        '<span class="sk-name">' + esc(s.name) + '</span><br>' +
+        '<span class="sk-scope">' + esc(s.scope || "") + '</span>' +
+        '</button>';
+    }).join("");
+    el.innerHTML = html || '<div class="v">no skills loaded</div>';
+    el.querySelectorAll(".sk-item").forEach(function (btn) {
+      btn.onclick = function () { selectSkill(btn.getAttribute("data-path")); };
+    });
+    if (activeSkillPath) {
+      var found = null;
+      for (var i = 0; i < skillList.length; i++) if (skillList[i].path === activeSkillPath) { found = skillList[i]; break; }
+      if (found) showSkill(found);
+      else { activeSkillPath = null; clearSkillEditor(); }
+    } else if (skillList.length) {
+      selectSkill(skillList[0].path);
+    } else {
+      clearSkillEditor();
+    }
   }
 
   function renderTools() {
@@ -1278,10 +1386,23 @@ window.PI_PORT = "__PI_WEBUI_PORT__";
   };
   $("modelPopClose").onclick = closeModelPop;
   $("rolePopClose").onclick = closeRolePop;
+  $("skillPopClose").onclick = closeSkillPop;
+  $("skillSave").onclick = function () {
+    if (!activeSkillPath) return;
+    var s = null;
+    for (var i = 0; i < skillList.length; i++) if (skillList[i].path === activeSkillPath) { s = skillList[i]; break; }
+    api("POST", "/api/skills", { path: activeSkillPath, content: $("skillContent").value }).then(function (r) {
+      if (r.error) alert(r.error);
+      else {
+        if (s) s.content = $("skillContent").value;
+        addSystemNote("Skill saved: " + (s ? s.name : activeSkillPath) + " — reload to apply");
+      }
+    });
+  };
   $("modelSortSel").onchange = function () { modelSort = this.value; renderModelPop(); };
   $("detailsBtnSide").onclick = function () { openDrawer(); closeSidebar(); };
   $("drawerClose").onclick = closeDrawer;
-  $("overlay").onclick = function () { closeDrawer(); closeSidebar(); closeModelPop(); closeRolePop(); };
+  $("overlay").onclick = function () { closeDrawer(); closeSidebar(); closeModelPop(); closeRolePop(); closeSkillPop(); };
   $("closeSideBtn").onclick = closeSidebar;
   $("menuBtn").onclick = function () {
     var sb = $("sidebar");
@@ -1296,17 +1417,20 @@ window.PI_PORT = "__PI_WEBUI_PORT__";
     }
   };
   $("refreshBtn").onclick = function () { loadState(); loadSessions(); closeSidebar(); };
-  function openDrawer() { closeModelPop(); closeRolePop(); $("drawer").classList.add("open"); $("overlay").classList.remove("hidden"); renderDrawer(); closeSidebar(); }
+  function openDrawer() { closeModelPop(); closeRolePop(); closeSkillPop(); $("drawer").classList.add("open"); $("overlay").classList.remove("hidden"); renderDrawer(); closeSidebar(); }
   function closeDrawer() { $("drawer").classList.remove("open"); syncOverlay(); }
-  function openModelPop() { closeDrawer(); closeRolePop(); closeSidebar(); $("modelPop").classList.add("open"); $("overlay").classList.remove("hidden"); loadModels(); }
+  function openModelPop() { closeDrawer(); closeRolePop(); closeSkillPop(); closeSidebar(); $("modelPop").classList.add("open"); $("overlay").classList.remove("hidden"); loadModels(); }
   function closeModelPop() { $("modelPop").classList.remove("open"); syncOverlay(); }
-  function openRolePop() { closeDrawer(); closeModelPop(); closeSidebar(); $("rolePop").classList.add("open"); $("overlay").classList.remove("hidden"); fetchRoles().then(renderRolePop); }
+  function openRolePop() { closeDrawer(); closeModelPop(); closeSkillPop(); closeSidebar(); $("rolePop").classList.add("open"); $("overlay").classList.remove("hidden"); fetchRoles().then(renderRolePop); }
   function closeRolePop() { $("rolePop").classList.remove("open"); syncOverlay(); }
+  function openSkillPop() { closeDrawer(); closeModelPop(); closeRolePop(); closeSidebar(); $("skillPop").classList.add("open"); $("overlay").classList.remove("hidden"); fetchSkills().then(renderSkillPop); }
+  function closeSkillPop() { $("skillPop").classList.remove("open"); syncOverlay(); }
   function modelPopOpen() { return $("modelPop").classList.contains("open"); }
   function rolePopOpen() { return $("rolePop").classList.contains("open"); }
+  function skillPopOpen() { return $("skillPop").classList.contains("open"); }
   function closeSidebar() { $("sidebar").classList.remove("open"); syncOverlay(); }
   function drawerOpen() { return $("drawer").classList.contains("open"); }
-  function syncOverlay() { if (drawerOpen() || modelPopOpen() || rolePopOpen() || $("sidebar").classList.contains("open")) $("overlay").classList.remove("hidden"); else $("overlay").classList.add("hidden"); }
+  function syncOverlay() { if (drawerOpen() || modelPopOpen() || rolePopOpen() || skillPopOpen() || $("sidebar").classList.contains("open")) $("overlay").classList.remove("hidden"); else $("overlay").classList.add("hidden"); }
   function setSidebarCollapsed(v) {
     $("sidebar").classList.toggle("collapsed", v);
     document.getElementById("app").classList.toggle("sb-collapsed", v);

@@ -9,7 +9,7 @@
  */
 
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
-import { readFileSync, existsSync, readdirSync } from "node:fs";
+import { readFileSync, existsSync, readdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { randomBytes } from "node:crypto";
 import {
@@ -603,6 +603,56 @@ function loadRoles(ctx: ExtensionContext | null): { roles: RoleView[]; active: s
 }
 
 // ---------------------------------------------------------------------------
+// Skills (edit SKILL.md files from loaded skills)
+// ---------------------------------------------------------------------------
+
+interface SkillView {
+  name: string;
+  description: string;
+  path: string;
+  scope: string;
+  content: string;
+}
+
+function listSkills(state: WebUiState): SkillView[] {
+  const cmds = state.pi ? state.pi.getCommands() : [];
+  const seen = new Set<string>();
+  const skills: SkillView[] = [];
+  for (const c of cmds) {
+    if (c.source !== "skill") continue;
+    const p = c.sourceInfo?.path;
+    if (!p || seen.has(p)) continue;
+    seen.add(p);
+    let content = "";
+    try {
+      content = existsSync(p) ? readFileSync(p, "utf8") : "";
+    } catch {
+      content = "";
+    }
+    skills.push({
+      name: c.name.replace(/^skill:/, ""),
+      description: c.description ?? "",
+      path: p,
+      scope: c.sourceInfo?.scope ?? "unknown",
+      content,
+    });
+  }
+  return skills;
+}
+
+function saveSkill(state: WebUiState, path: string, content: string): { ok: boolean; error?: string } {
+  if (typeof content !== "string") return { ok: false, error: "content required" };
+  const known = listSkills(state).some((s) => s.path === path);
+  if (!known) return { ok: false, error: "unknown skill path" };
+  try {
+    writeFileSync(path, content, "utf8");
+    return { ok: true };
+  } catch (e: any) {
+    return { ok: false, error: e?.message ?? String(e) };
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Slash commands (web-ui side)
 // ---------------------------------------------------------------------------
 
@@ -778,6 +828,24 @@ async function handleApi(state: WebUiState, req: IncomingMessage, res: ServerRes
 
   if (path === "/api/roles" && req.method === "GET") {
     json(res, 200, loadRoles(state.ctx));
+    return;
+  }
+
+  if (path === "/api/skills" && req.method === "GET") {
+    json(res, 200, { skills: listSkills(state) });
+    return;
+  }
+
+  if (path === "/api/skills" && req.method === "POST") {
+    const body = await readBody(req);
+    const p = typeof body?.path === "string" ? body.path : "";
+    const content = typeof body?.content === "string" ? body.content : null;
+    if (!p || content === null) {
+      json(res, 400, { error: "path and content required" });
+      return;
+    }
+    const result = saveSkill(state, p, content);
+    json(res, result.ok ? 200 : 400, result);
     return;
   }
 

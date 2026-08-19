@@ -5,14 +5,12 @@
     "allowLocalBinding": true,
     "allowAllUnixSockets": true,
     "allowedDomains": [
-      "*github.com",
-      "*ghe.com",
-      "*atlassian.net",
-      "*atlassian.com",
-      "*lendo.dev",
-      "*lendo.se",
+      "*.github.com",
       "*.ghe.com",
-      "*.github.com"
+      "*.atlassian.net",
+      "*.atlassian.com",
+      "*.lendo.dev",
+      "*.lendo.se"
     ],
     "deniedDomains": []
   },

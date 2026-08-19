@@ -17,5 +17,5 @@
   ],
   "theme": "my-theme",
   "hideThinkingBlock": true,
-  "defaultThinkingLevel": "high"
+  "defaultThinkingLevel": "medium"
 }

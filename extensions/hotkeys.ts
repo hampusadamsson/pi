@@ -7,6 +7,12 @@
  * Root modal (which-key style key grid):
  *   m        → model picker (MRU first, current model marked ●)
  *   r        → role picker (reads the roles extension config, dispatches /role)
+ *   s        → skill picker (reads /skill:* commands)
+ *   e        → session picker (resume a session)
+ *   n        → new session immediately
+ *   c        → compact context immediately
+ *   R        → reload extensions/config immediately
+ *   u        → run `pi update --all`, then reload
  *   /        → fuzzy search over all actions
  *   <other>  → unbound printable char jumps straight into fuzzy search
  *   esc / q  → exit
@@ -29,8 +35,13 @@
  *   "actions": {
  *     "m": { "type": "models" },
  *     "r": { "type": "roles" },
+ *     "s": { "type": "skills" },
+ *     "e": { "type": "sessions" },
+ *     "n": { "type": "new" },
+ *     "c": { "type": "compact" },
+ *     "R": { "type": "reload" },
+ *     "u": { "type": "update" },
  *     "t": { "type": "setThinking", "value": "high" },
- *     "c": { "type": "command", "name": "compact" },
  *     "w": { "type": "role", "name": "work" }
  *   }
  * }
@@ -39,6 +50,12 @@
  * Action types:
  *   models      model picker
  *   roles       role picker (roles extension)
+ *   skills      skill picker (dispatch /skill:<name>)
+ *   sessions    session picker (resume, lists current project sessions)
+ *   new         start a new session immediately
+ *   compact     trigger compaction immediately
+ *   reload      reload extensions/config immediately
+ *   update      run `pi update --all`, then reload
  *   role        switch to a fixed role immediately
  *   setThinking set thinking level
  *   command     dispatch any extension slash command
@@ -52,6 +69,8 @@ import {
 	getAgentDir,
 	type ExtensionAPI,
 	type ExtensionContext,
+	SessionManager,
+	type SessionInfo,
 	type Theme,
 } from "@earendil-works/pi-coding-agent";
 import type { Model } from "@earendil-works/pi-ai";
@@ -75,6 +94,12 @@ type ThinkingLevel = "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "
 type ActionDef =
 	| { type: "models"; label?: string }
 	| { type: "roles"; label?: string }
+	| { type: "skills"; label?: string }
+	| { type: "sessions"; label?: string }
+	| { type: "new"; label?: string }
+	| { type: "compact"; label?: string }
+	| { type: "reload"; label?: string }
+	| { type: "update"; label?: string }
 	| { type: "role"; label?: string; name: string }
 	| { type: "setThinking"; label?: string; value: ThinkingLevel }
 	| { type: "command"; label?: string; name: string; args?: string };
@@ -89,6 +114,12 @@ interface HotkeysConfig {
 const DEFAULT_ACTIONS: Record<string, ActionDef> = {
 	m: { type: "models" },
 	r: { type: "roles" },
+	s: { type: "skills" },
+	e: { type: "sessions" },
+	n: { type: "new" },
+	c: { type: "compact" },
+	R: { type: "reload" },
+	u: { type: "update" },
 };
 
 const MRU_ENTRY = "hotkeys-mru";
@@ -113,6 +144,12 @@ function toActionDef(raw: unknown): ActionDef | undefined {
 	switch (def.type) {
 		case "models":
 		case "roles":
+		case "skills":
+		case "sessions":
+		case "new":
+		case "compact":
+		case "reload":
+		case "update":
 			return { type: def.type, label: typeof def.label === "string" ? def.label : undefined };
 		case "role":
 			if (typeof def.name === "string") {
@@ -271,6 +308,18 @@ function actionLabel(key: string, def: ActionDef): string {
 			return "models";
 		case "roles":
 			return "roles";
+		case "skills":
+			return "skills";
+		case "sessions":
+			return "sessions";
+		case "new":
+			return "new session";
+		case "compact":
+			return "compact";
+		case "reload":
+			return "reload";
+		case "update":
+			return "update pi";
 		case "role":
 			return `role: ${def.name}`;
 		case "setThinking":
@@ -284,18 +333,28 @@ function modelKey(model: { provider: string; id: string }): string {
 	return `${model.provider}/${model.id}`;
 }
 
+function sessionLabel(s: SessionInfo): string {
+	if (s.name) return s.name;
+	const first = s.firstMessage.trim().split("\n")[0];
+	if (first) return first.length > 60 ? `${first.slice(0, 57)}…` : first;
+	return s.created.toISOString().slice(0, 16).replace("T", " ");
+}
+
 // ---------------------------------------------------------------- modal component
 
-type ListKind = "models" | "roles" | "actions";
+type ListKind = "models" | "roles" | "skills" | "sessions" | "actions";
 
 type SelectionResult =
 	| { kind: "model"; value: string }
 	| { kind: "role"; value: string }
+	| { kind: "skill"; value: string }
+	| { kind: "session"; value: string }
 	| { kind: "direct"; def: ActionDef };
 
 interface Deps {
 	config: HotkeysConfig;
 	buildItems: (kind: ListKind) => SelectItem[];
+	loadSessions: () => Promise<SelectItem[]>;
 	actionByKey: (key: string) => ActionDef | undefined;
 }
 
@@ -415,20 +474,43 @@ class HotkeysModal implements Focusable {
 
 	// ------------------------------------------------------------ actions
 
-	private openList(kind: ListKind, seedQuery: string): void {
-		this.view = "list";
-		this.kind = kind;
-		this.allItems = this.deps.buildItems(kind);
-		this.list = new SelectList(this.allItems, Math.min(this.allItems.length, 12), {
+	private newList(items: SelectItem[]): SelectList {
+		return new SelectList(items, Math.min(items.length, 12), {
 			selectedPrefix: (t) => this.theme.fg("accent", t),
 			selectedText: (t) => this.theme.fg("accent", t),
 			description: (t) => this.theme.fg("muted", t),
 			scrollInfo: (t) => this.theme.fg("dim", t),
 			noMatch: (t) => this.theme.fg("warning", t),
 		});
+	}
+
+	private openList(kind: ListKind, seedQuery: string): void {
+		this.view = "list";
+		this.kind = kind;
 		this.query = seedQuery;
 		this.filterMode = seedQuery.length > 0;
+
+		if (kind === "sessions") {
+			// Sessions load async; show a placeholder and swap in the real list.
+			this.allItems = [{ value: "", label: "  loading…", description: undefined }];
+			this.list = this.newList(this.allItems);
+			this.applyFilter();
+			void this.loadSessionsAsync();
+			return;
+		}
+
+		this.allItems = this.deps.buildItems(kind);
+		this.list = this.newList(this.allItems);
 		this.applyFilter();
+	}
+
+	private async loadSessionsAsync(): Promise<void> {
+		const items = await this.deps.loadSessions();
+		if (this.view !== "list" || this.kind !== "sessions") return;
+		this.allItems = items;
+		this.list = this.newList(items);
+		this.applyFilter();
+		this.tui.requestRender();
 	}
 
 	private applyFilter(): void {
@@ -471,6 +553,14 @@ class HotkeysModal implements Focusable {
 			this.done({ kind: "role", value });
 			return;
 		}
+		if (this.kind === "skills") {
+			this.done({ kind: "skill", value });
+			return;
+		}
+		if (this.kind === "sessions") {
+			this.done({ kind: "session", value });
+			return;
+		}
 		// actions view: value is the action key
 		const def = this.deps.actionByKey(value);
 		if (def) this.runDef(def);
@@ -483,6 +573,14 @@ class HotkeysModal implements Focusable {
 		}
 		if (def.type === "roles") {
 			this.openList("roles", "");
+			return;
+		}
+		if (def.type === "skills") {
+			this.openList("skills", "");
+			return;
+		}
+		if (def.type === "sessions") {
+			this.openList("sessions", "");
 			return;
 		}
 		this.done({ kind: "direct", def });
@@ -544,7 +642,7 @@ class HotkeysModal implements Focusable {
 				),
 			);
 		} else {
-			const title = this.kind === "models" ? "models" : this.kind === "roles" ? "roles" : "actions";
+			const title = this.kind === "models" ? "models" : this.kind === "roles" ? "roles" : this.kind === "skills" ? "skills" : this.kind === "sessions" ? "sessions" : "actions";
 			lines.push(row(` ${th.fg("accent", th.bold(title))}`));
 
 			// Filter row (always shown in list view so / state is visible)
@@ -602,6 +700,22 @@ export default function (pi: ExtensionAPI) {
 		return {
 			config,
 			actionByKey: (key) => config.actions?.[key],
+			loadSessions: async () => {
+				const current = ctx.sessionManager.getSessionFile();
+				try {
+					const list = await SessionManager.list(ctx.cwd, ctx.sessionManager.getSessionDir());
+					return list
+						.sort((a, b) => b.modified.getTime() - a.modified.getTime())
+						.map((s) => ({
+							value: s.path,
+							label: s.path === current ? `● ${sessionLabel(s)}` : `  ${sessionLabel(s)}`,
+							description: s.cwd,
+						}));
+				} catch (err) {
+					console.error(`hotkeys: failed to list sessions: ${(err as Error).message}`);
+					return [];
+				}
+			},
 			buildItems: (kind) => {
 				if (kind === "models") {
 					const currentKey = ctx.model ? modelKey(ctx.model) : undefined;
@@ -635,6 +749,19 @@ export default function (pi: ExtensionAPI) {
 					});
 					return items;
 				}
+				if (kind === "skills") {
+					return pi
+						.getCommands()
+						.filter((c) => c.source === "skill")
+						.map((c) => ({
+							value: c.name,
+							label: `  ${c.name.replace(/^skill:/, "")}`,
+							description: c.description,
+						}))
+						.sort((a, b) => a.label.localeCompare(b.label));
+				}
+				// sessions list is loaded async via deps.loadSessions (buildItems is sync)
+				if (kind === "sessions") return [];
 				// actions
 				return Object.entries(config.actions ?? {})
 					.filter(([key]) => key.length === 1)
@@ -701,8 +828,42 @@ export default function (pi: ExtensionAPI) {
 			return;
 		}
 
+		if (result.kind === "skill") {
+			dispatchCommand(`/${result.value}`);
+			return;
+		}
+
+		if (result.kind === "session") {
+			dispatchCommand(`/hotvim-do resume ${result.value}`);
+			return;
+		}
+
 		// direct action
 		const def = result.def;
+		if (def.type === "new") {
+			dispatchCommand("/hotvim-do new");
+			return;
+		}
+		if (def.type === "compact") {
+			ctx.compact();
+			notify("compacting session", "info");
+			return;
+		}
+		if (def.type === "reload") {
+			dispatchCommand("/hotvim-do reload");
+			return;
+		}
+		if (def.type === "update") {
+			notify("updating pi (pi update --all)…", "info");
+			const res = await pi.exec("pi", ["update", "--all"]);
+			if (res.code === 0) {
+				dispatchCommand("/hotvim-do reload");
+			} else {
+				const err = res.stderr.trim() || res.stdout.trim() || `exit ${res.code}`;
+				notify(`hotkeys: pi update failed: ${err}`, "error");
+			}
+			return;
+		}
 		if (def.type === "setThinking") {
 			pi.setThinkingLevel(def.value);
 			notify(`thinking: ${def.value}`, "info");
@@ -730,6 +891,28 @@ export default function (pi: ExtensionAPI) {
 		description: "Open hotkeys modal (vim-style launcher)",
 		handler: async (_args, ctx) => {
 			await open(ctx);
+		},
+	});
+
+	pi.registerCommand("hotvim-do", {
+		description: "hotkeys internal: session control (new/reload/resume)",
+		handler: async (args, ctx) => {
+			const space = args.indexOf(" ");
+			const op = space === -1 ? args.trim() : args.slice(0, space).trim();
+			const arg = space === -1 ? "" : args.slice(space + 1).trim();
+			if (op === "new") {
+				await ctx.newSession();
+				return;
+			}
+			if (op === "reload") {
+				await ctx.reload();
+				return;
+			}
+			if (op === "resume") {
+				await ctx.switchSession(arg);
+				return;
+			}
+			if (ctx.hasUI) ctx.ui.notify(`hotkeys: unknown internal action: ${op || "(empty)"}`, "warning");
 		},
 	});
 

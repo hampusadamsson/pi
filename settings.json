@@ -16,7 +16,7 @@
   ],
   "theme": "my-theme",
   "hideThinkingBlock": true,
-  "defaultThinkingLevel": "medium",
+  "defaultThinkingLevel": "high",
   "enableInstallTelemetry": false,
   "markdown": {
     "mermaid": "streaming"

@@ -9,7 +9,6 @@
     "npm:pi-caveman",
     "npm:pi-profiles",
     "npm:pi-sandbox",
-    "npm:pi-ollama-cloud-provider",
     "git:github.com/kdejaeger/pi-scoped-models-extra-info",
     "npm:@twogiants/pi-anthropic-vertex",
     "npm:pi-mcp-adapter",
@@ -17,5 +16,9 @@
   ],
   "theme": "my-theme",
   "hideThinkingBlock": true,
-  "defaultThinkingLevel": "medium"
+  "defaultThinkingLevel": "medium",
+  "enableInstallTelemetry": false,
+  "markdown": {
+    "mermaid": "streaming"
+  }
 }

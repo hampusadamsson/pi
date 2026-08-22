@@ -470,13 +470,23 @@ function handleSse(state: WebUiState, req: IncomingMessage, res: ServerResponse)
   });
 }
 
+function sessionStats(path: string): { costTotal: number; tokensTotal: number } {
+  try {
+    const sm = SessionManager.open(path);
+    const entries = sm.buildContextEntries();
+    return { costTotal: computeCost(entries), tokensTotal: computeTokens(entries) };
+  } catch {
+    return { costTotal: 0, tokensTotal: 0 };
+  }
+}
+
 async function listSessions(state: WebUiState) {
   const cwd = state.cwd || state.ctx?.cwd || process.cwd();
   const [local, all] = await Promise.all([SessionManager.list(cwd), SessionManager.listAll()]);
   const seen = new Set<string>();
   const sessions: any[] = [];
-  for (const s of local) {
-    seen.add(s.path);
+  const push = (s: any, current: boolean) => {
+    const stats = sessionStats(s.path);
     sessions.push({
       path: s.path,
       id: s.id,
@@ -486,23 +496,19 @@ async function listSessions(state: WebUiState) {
       modified: s.modified,
       messageCount: s.messageCount,
       firstMessage: s.firstMessage,
-      current: s.path === state.sessionFile,
+      current,
+      costTotal: stats.costTotal,
+      tokensTotal: stats.tokensTotal,
     });
+  };
+  for (const s of local) {
+    seen.add(s.path);
+    push(s, s.path === state.sessionFile);
   }
   for (const s of all) {
     if (seen.has(s.path)) continue;
     seen.add(s.path);
-    sessions.push({
-      path: s.path,
-      id: s.id,
-      cwd: s.cwd,
-      name: s.name,
-      created: s.created,
-      modified: s.modified,
-      messageCount: s.messageCount,
-      firstMessage: s.firstMessage,
-      current: s.path === state.sessionFile,
-    });
+    push(s, s.path === state.sessionFile);
   }
   return { cwd, sessions };
 }
@@ -993,16 +999,6 @@ async function handleApi(state: WebUiState, req: IncomingMessage, res: ServerRes
     }
     pushState(state);
     json(res, 200, { ok: true, role: state.role });
-    return;
-  }
-
-  if (path === "/api/themes" && req.method === "GET") {
-    try {
-      const themes = state.ctx?.ui?.getAllThemes?.() ?? [];
-      json(res, 200, { themes, current: state.theme });
-    } catch (e: any) {
-      json(res, 500, { error: e?.message ?? String(e) });
-    }
     return;
   }
 

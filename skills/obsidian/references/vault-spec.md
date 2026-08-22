@@ -101,6 +101,7 @@ No title heading in the body — the filename is the title.
 - `type` — matches the primary `type/` tag.
 - `description` — one line, optimised for LLM search.
 - `tags` — hierarchical, from the vocabulary below.
+- `timestamp` — the template shows `{{date}}` as a placeholder for Obsidian's own template-insertion syntax. When the agent creates/edits a page by writing the file directly, substitute the actual current date (`YYYY-MM-DD`) — never leave the literal string `{{date}}` in a saved file.
 - `resource` — machine-readable pointer(s) to the source of truth the agent reads to refresh this page (repo path, Confluence URL, Snowflake table, source daily note). For the LLM, not humans. String or list. Human/operational URLs (console stage/prod, dashboards) go in the `# Links` section, not here.
 - `# Links` — in-body table of operational URLs for people: console (stage/prod), docs, dashboards.
 - `owner` — services only: who owns the code (`dml` = ours; `lendo-se`/`lendo-no`/`lendo-pfm` = integrate). Kreddy = `lendo-pfm`.

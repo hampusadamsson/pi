@@ -2,6 +2,10 @@
 
 Source: vault `template/` directory. Use these to create new pages after user approval.
 
+`{{date}}` here is Obsidian's own template-insertion placeholder. When the agent writes a file directly
+(not via Obsidian's "Insert Template" command), replace it with the actual current date (`YYYY-MM-DD`) —
+never save a file with the literal string `{{date}}`.
+
 ## wiki (canonical)
 
 ```markdown

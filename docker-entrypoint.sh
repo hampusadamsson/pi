@@ -40,7 +40,9 @@ pi-web-sessiond &
 sessiond_pid=$!
 
 ready=""
-for _ in $(seq 1 240); do
+i=0
+while [ "$i" -lt 240 ]; do
+  i=$((i + 1))
   if [ -S "$PI_WEB_SESSIOND_SOCKET" ]; then
     ready=1
     break

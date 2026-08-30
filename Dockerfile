@@ -6,7 +6,7 @@ ARG PI_WEB_VERSION=latest
 # curl: required by PI WEB runtime checks and by the uv installer below.
 # ripgrep + bubblewrap: required by the pi-sandbox extension (sandbox.json).
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends git ca-certificates curl ripgrep bubblewrap && \
+    apt-get install -y --no-install-recommends git ca-certificates curl ripgrep bubblewrap python3 make g++ && \
     mkdir -p /usr/share/keyrings && \
     curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg -o /usr/share/keyrings/githubcli-archive-keyring.gpg && \
     chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg && \

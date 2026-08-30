@@ -1,4 +1,4 @@
-name: Build
+name: Build PI WEB
 
 on:
   push:
@@ -37,8 +37,11 @@ jobs:
           tags: |
             type=sha,prefix=sha-
             type=raw,value=latest,enable={{is_default_branch}}
+          labels: |
+            org.opencontainers.image.title=PI WEB
+            org.opencontainers.image.description=PI WEB web UI for Pi Coding Agent
 
-      - name: Build and push
+      - name: Build and push PI WEB
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -48,3 +51,5 @@ jobs:
           platforms: linux/amd64,linux/arm64
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          build-args: |
+            PI_WEB_VERSION=${{ vars.PI_WEB_VERSION || 'latest' }}

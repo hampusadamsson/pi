@@ -11,7 +11,8 @@
     "git:github.com/kdejaeger/pi-scoped-models-extra-info",
     "npm:pi-mcp-adapter",
     "npm:@vanillagreen/pi-session-manager",
-    "npm:pi-subagents"
+    "npm:pi-subagents",
+    "../../../../opt/homebrew/lib/node_modules/@jmfederico/pi-web/dist/pi-packages/relays"
   ],
   "theme": "my-theme",
   "hideThinkingBlock": true,

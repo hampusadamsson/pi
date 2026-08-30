@@ -63,4 +63,4 @@ COPY docker-entrypoint.sh /usr/local/bin/pi-web-entrypoint
 RUN chmod +x /usr/local/bin/pi-web-entrypoint
 
 WORKDIR /workspace
-CMD ["pi-web-entrypoint"]
+ENTRYPOINT ["pi-web-entrypoint"]

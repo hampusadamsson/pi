@@ -5,11 +5,21 @@
       "url": "https://snowflake-agentic-poc-mcp.data.stage.lendo.dev/mcp",
       "enabled": true
     },
+    "humio": {
+      "command": "uvx",
+      "args": [
+        "--from",
+        "git+https://lendo-group.ghe.com/lendo-data-ml/humio-mcp.git@1.0.0",
+        "humio-mcp"
+      ],
+      "env": {
+        "HUMIO_TOKEN": "${HUMIO_TOKEN}",
+        "HUMIO_ENDPOINT": "https://cloud.humio.com"
+      }
+    },
     "atlassian": {
       "command": "uvx",
       "args": [
-        "--with",
-        "atlassian-python-api==4.0.7",
         "mcp-atlassian"
       ],
       "env": {

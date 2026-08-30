@@ -1,22 +1,21 @@
 {
-  "defaultModel": "deepseek-v4-pro",
-  "defaultProvider": "opencode-go",
-  "lastChangelogVersion": "0.84.2",
+  "defaultModel": "claude-sonnet-5",
+  "defaultProvider": "anthropic-vertex",
+  "lastChangelogVersion": "0.84.3",
   "packages": [
     "npm:pi-zentui",
     "npm:@hypabolic/pi-hypa",
-    "npm:pi-vim",
     "npm:pi-caveman",
     "npm:pi-profiles",
     "npm:pi-sandbox",
     "git:github.com/kdejaeger/pi-scoped-models-extra-info",
-    "npm:@twogiants/pi-anthropic-vertex",
     "npm:pi-mcp-adapter",
-    "npm:@vanillagreen/pi-session-manager"
+    "npm:@vanillagreen/pi-session-manager",
+    "npm:pi-subagents"
   ],
   "theme": "my-theme",
   "hideThinkingBlock": true,
-  "defaultThinkingLevel": "high",
+  "defaultThinkingLevel": "medium",
   "enableInstallTelemetry": false,
   "markdown": {
     "mermaid": "streaming"

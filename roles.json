@@ -3,10 +3,10 @@
   "roles": {
     "work": {
       "description": "Senior full-stack dev, writes and tests code",
-      "model": "anthropic-vertex/claude-sonnet-5",
+      "model": "vertex-anthropic/claude-sonnet-5",
       "thinkingLevel": "medium",
       "systemPrompt": "You are a senior full-stack developer focused on writing clean, tested code. Prefer small, verifiable changes. Run tests after edits.",
-      "promptMode": "append",
+      "promptMode": "replace",
       "tools": {
         "allow": [
           "edit",
@@ -40,7 +40,7 @@
     },
     "researcher": {
       "description": "Research assistant with access to all skills (Jira, Confluence, GitHub, Obsidian, Snowflake)",
-      "model": "anthropic-vertex/claude-sonnet-5",
+      "model": "vertex-anthropic/claude-sonnet-5",
       "promptMode": "append",
       "systemPromptFile": "prompts/researcher.md",
       "tools": {
@@ -52,7 +52,8 @@
           "hypa_shell",
           "hypa_find",
           "hypa_ls",
-          "mcp*"
+          "mcp*",
+          "subagent*"
         ]
       },
       "skills": [
@@ -60,8 +61,23 @@
         "confluence",
         "github",
         "obsidian",
-        "snowflake"
+        "snowflake",
+        "vault-daily-raw",
+        "vault-maintenance"
       ],
+      "hidden": false
+    },
+    "humio": {
+      "description": "Humio debugger",
+      "model": "vertex-anthropic/claude-sonnet-5",
+      "promptMode": "replace",
+      "systemPrompt": "Use Humio MCP to debug Logs",
+      "tools": {
+        "allow": [
+          "mcp*"
+        ]
+      },
+      "skills": [],
       "hidden": false
     }
   }

@@ -7,13 +7,14 @@
  * Root modal (which-key style key grid):
  *   m        → model picker (MRU first, current model marked ●)
  *   r        → role picker (reads the roles extension config, dispatches /role)
- *   s        → skill picker (reads /skill:* commands)
- *   e        → session picker (resume a session)
+ *   s        → session picker (resume a session)
+ *   S        → skill picker (reads /skill:* commands)
  *   n        → new session immediately
  *   c        → compact context immediately
  *   R        → reload extensions/config immediately
  *   u        → run `pi update --all`, then reload
  *   /        → fuzzy search over all actions
+ *   y        → copy submenu: (l) last output, (f) full context → clipboard
  *   <other>  → unbound printable char jumps straight into fuzzy search
  *   esc / q  → exit
  *
@@ -21,7 +22,21 @@
  *   /        → enter filter mode (fzf-style fuzzy)
  *   j/k/↑↓   → navigate, gg → top, G → bottom
  *   enter    → select
+ *   i        → close modal, focus input in INSERT (except in free-text filter)
  *   esc      → clear query (if any), else step back to root
+ *
+ * Vim input mode ("vim": false in hotkeys.json to disable, /vim-mode toggles):
+ *   INSERT   default mode; esc → NORMAL; status bar shows -- INSERT --
+ *   NORMAL   motions h j k l w b e 0 ^ $ gg G · x X r s S · dd dw db de d$ D ·
+ *            yy Y p P · cc c$ C · J join · u (undo) · i I a A o O → INSERT ·
+ *            v V → VISUAL · enter submits · ctrl+c passes through
+ *   VISUAL   motions extend selection · d/x delete · y yank · c change ·
+ *            esc/v exit · border turns warning-colored while active
+ *   leader   space in NORMAL/VISUAL opens the hotkeys modal (which-key style);
+ *            follow-up key dispatches inside the modal: m models · r roles ·
+ *            s sessions · S skills · n new · c compact · R reload · u update ·
+ *            / action search · i INSERT
+ *   i        from anywhere (modal or NORMAL mode) focuses input in INSERT
  *
  * Config (merged, project overrides global):
  *   ~/.pi/agent/hotkeys.json
@@ -32,11 +47,12 @@
  *   "opener": "super+e",
  *   "width": "50%",
  *   "maxHeight": "80%",
+ *   "vim": true,
  *   "actions": {
  *     "m": { "type": "models" },
  *     "r": { "type": "roles" },
- *     "s": { "type": "skills" },
- *     "e": { "type": "sessions" },
+ *     "s": { "type": "sessions" },
+ *     "S": { "type": "skills" },
  *     "n": { "type": "new" },
  *     "c": { "type": "compact" },
  *     "R": { "type": "reload" },
@@ -66,9 +82,12 @@
 
 import {
 	CONFIG_DIR_NAME,
+	copyToClipboard,
+	CustomEditor,
 	getAgentDir,
 	type ExtensionAPI,
 	type ExtensionContext,
+	type KeybindingsManager,
 	SessionManager,
 	type SessionInfo,
 	type Theme,
@@ -78,6 +97,7 @@ import {
 	CURSOR_MARKER,
 	fuzzyFilter,
 	type Focusable,
+	type EditorTheme,
 	matchesKey,
 	type SelectItem,
 	SelectList,
@@ -108,14 +128,15 @@ interface HotkeysConfig {
 	opener?: string;
 	width?: string;
 	maxHeight?: string;
+	vim?: boolean;
 	actions?: Record<string, ActionDef>;
 }
 
 const DEFAULT_ACTIONS: Record<string, ActionDef> = {
 	m: { type: "models" },
 	r: { type: "roles" },
-	s: { type: "skills" },
-	e: { type: "sessions" },
+	s: { type: "sessions" },
+	S: { type: "skills" },
 	n: { type: "new" },
 	c: { type: "compact" },
 	R: { type: "reload" },
@@ -200,6 +221,7 @@ function readGlobalConfig(): HotkeysConfig {
 		opener: typeof file.opener === "string" ? file.opener : undefined,
 		width: typeof file.width === "string" ? file.width : undefined,
 		maxHeight: typeof file.maxHeight === "string" ? file.maxHeight : undefined,
+		vim: typeof file.vim === "boolean" ? file.vim : undefined,
 		actions,
 	};
 }
@@ -212,6 +234,7 @@ function loadConfig(ctx: ExtensionContext): HotkeysConfig {
 		if (typeof file.opener === "string") cfg.opener = file.opener;
 		if (typeof file.width === "string") cfg.width = file.width;
 		if (typeof file.maxHeight === "string") cfg.maxHeight = file.maxHeight;
+		if (typeof file.vim === "boolean") cfg.vim = file.vim;
 		if (file.actions) {
 			const actions: Record<string, ActionDef> = {};
 			mergeActions(actions, file.actions);
@@ -340,15 +363,780 @@ function sessionLabel(s: SessionInfo): string {
 	return s.created.toISOString().slice(0, 16).replace("T", " ");
 }
 
+// ---------------------------------------------------------------- clipboard helpers
+
+/** Extract plain text from a message content (string or content blocks). */
+function extractText(content: unknown): string {
+	if (typeof content === "string") return content;
+	if (Array.isArray(content)) {
+		return content
+			.map((b) => (b && typeof b === "object" && (b as { type?: string }).type === "text" ? String((b as { text?: string }).text ?? "") : ""))
+			.filter(Boolean)
+			.join("\n");
+	}
+	return "";
+}
+
+/** Text of the most recent assistant message in the current session branch. */
+function lastOutputText(ctx: ExtensionContext): string | undefined {
+	const branch = ctx.sessionManager.getBranch();
+	for (let i = branch.length - 1; i >= 0; i--) {
+		const entry = branch[i];
+		if (entry?.type !== "message") continue;
+		const msg = (entry as { message?: { role?: string; content?: unknown } }).message;
+		if (!msg || msg.role !== "assistant") continue;
+		const text = extractText(msg.content);
+		if (text.trim()) return text;
+	}
+	return undefined;
+}
+
+/** Full conversation context (user + assistant text) as markdown-ish transcript. */
+function fullContextText(ctx: ExtensionContext): string {
+	const parts: string[] = [];
+	for (const entry of ctx.sessionManager.getBranch()) {
+		if (entry?.type !== "message") continue;
+		const msg = (entry as { message?: { role?: string; content?: unknown } }).message;
+		if (!msg || (msg.role !== "user" && msg.role !== "assistant")) continue;
+		const role = msg.role;
+		const text = extractText(msg.content);
+		if (!text.trim()) continue;
+		parts.push(`## ${role}\n\n${text}`);
+	}
+	return parts.join("\n\n");
+}
+
+// ---------------------------------------------------------------- vim input mode
+
+type VimMode = "normal" | "insert" | "visual" | "visual-line";
+
+interface Pos {
+	line: number;
+	col: number;
+}
+
+/**
+ * Bridge between the vim editor and the rest of the extension:
+ * - modals push `i` back into the editor (close + focus input in INSERT)
+ * - leader combos (space in NORMAL) open the hotkeys modal on a preset action
+ */
+const vimBridge: {
+	editor: VimEditor | undefined;
+	openLauncher: ((action?: string) => void) | undefined;
+	opener?: KeyId;
+} = { editor: undefined, openLauncher: undefined };
+
+/** Extension context for status-bar updates; set once the UI is available. */
+let uiCtx: ExtensionContext | undefined;
+let vimEnabled = true;
+
+/** Private Editor internals used for cursor/text manipulation. */
+interface EditorInternals {
+	state: { lines: string[]; cursorLine: number; cursorCol: number };
+	setCursorCol(col: number): void;
+	moveCursor(deltaLine: number, deltaCol: number): void;
+	moveWordBackwards(): void;
+	moveWordForwards(): void;
+	deleteToEndOfLine(): void;
+	pageScroll(direction: -1 | 1): void;
+	pushUndoSnapshot(): void;
+	undo(): void;
+	getText(): string;
+	onChange?: (text: string) => void;
+}
+
+const isWs = (c: string | undefined): boolean => c === undefined || /\s/.test(c);
+
+/** Start of next word (skips current run + following whitespace). */
+function wordForward(lines: string[], pos: Pos): Pos {
+	let { line, col } = pos;
+	const ch = () => (lines[line] ?? "")[col];
+	const len = () => (lines[line] ?? "").length;
+	while (line < lines.length && col < len() && !isWs(ch())) col++;
+	while (line < lines.length) {
+		if (col >= len()) {
+			line++;
+			col = 0;
+			continue;
+		}
+		if (isWs(ch())) {
+			col++;
+			continue;
+		}
+		break;
+	}
+	return { line, col };
+}
+
+/** Start of previous word. */
+function wordBack(lines: string[], pos: Pos): Pos {
+	let { line, col } = pos;
+	const ch = () => (lines[line] ?? "")[col];
+	col--;
+	while (line >= 0) {
+		if (col < 0) {
+			line--;
+			col = (lines[line] ?? "").length - 1;
+			continue;
+		}
+		if (isWs(ch())) {
+			col--;
+			continue;
+		}
+		break;
+	}
+	while (line >= 0 && col >= 0 && !isWs(ch())) col--;
+	col++;
+	if (line < 0) return { line: 0, col: 0 };
+	return { line, col: Math.max(0, col) };
+}
+
+/** Last char of current/next word. */
+function wordEnd(lines: string[], pos: Pos): Pos {
+	let { line, col } = pos;
+	const ch = (c: number) => (lines[line] ?? "")[c];
+	const len = () => (lines[line] ?? "").length;
+	col++;
+	while (line < lines.length) {
+		if (col >= len()) {
+			line++;
+			col = 0;
+			continue;
+		}
+		if (isWs(ch(col))) {
+			col++;
+			continue;
+		}
+		break;
+	}
+	while (line < lines.length && col + 1 < len() && !isWs(ch(col + 1))) col++;
+	return { line, col };
+}
+
+function firstNonBlank(line: string): number {
+	const m = /\S/.exec(line);
+	return m ? m.index : 0;
+}
+
+/** Vim-style modal input editor. INSERT by default; esc → NORMAL; v → VISUAL. */
+class VimEditor extends CustomEditor {
+	mode: VimMode = "insert";
+	private pendingG = false;
+	private pendingOp: "d" | "y" | "c" | undefined;
+	private pendingReplace = false;
+	private anchor: Pos | undefined;	private register: { type: "char" | "line"; text: string } | undefined;
+	private defaultBorder: (str: string) => string;
+	private lastEscAt = 0;
+
+	constructor(tui: TUI, theme: EditorTheme, keybindings: KeybindingsManager) {
+		super(tui, theme, keybindings);
+		this.defaultBorder = this.borderColor;
+	}
+
+	private ed(): EditorInternals {
+		return this as unknown as EditorInternals;
+	}
+
+	setMode(mode: VimMode): void {
+		const was = this.mode;
+		this.mode = mode;
+		this.pendingG = false;
+		this.pendingOp = undefined;
+		this.pendingReplace = false;
+		if (mode !== "visual" && mode !== "visual-line") this.anchor = undefined;
+		const e = this.ed();
+		if (was === "insert" && mode === "normal") {
+			// vim: step left when leaving insert at end of line
+			const line = e.state.lines[e.state.cursorLine] ?? "";
+			if (e.state.cursorCol >= line.length && e.state.cursorCol > 0) {
+				e.setCursorCol(line.length - 1);
+			}
+		}
+		this.syncModeUI();
+	}
+
+	private syncModeUI(): void {
+		const theme = uiCtx?.ui.theme;
+		let label = "-- INSERT --";
+		let border = this.defaultBorder;
+		if (this.mode === "normal") {
+			label = "-- NORMAL --";
+			border = theme ? (s: string) => theme.fg("accent", s) : border;
+		} else if (this.mode === "visual" || this.mode === "visual-line") {
+			label = this.mode === "visual" ? "-- VISUAL --" : "-- V-LINE --";
+			border = theme ? (s: string) => theme.fg("warning", s) : border;
+		}
+		this.borderColor = border;
+		if (uiCtx?.hasUI) uiCtx.ui.setStatus("hotvim", label);
+		this.tui.requestRender();
+	}
+
+	handleInput(data: string): void {
+		if (matchesKey(data, "escape")) {
+			const now = Date.now();
+			const double = now - this.lastEscAt < 500;
+			this.lastEscAt = now;
+			if (double) {
+				this.lastEscAt = 0;
+				// cancel agent execution
+				if (this.onEscape) this.onEscape();
+				else super.handleInput(data);
+				return;
+			}
+			if (this.mode === "insert") {
+				this.setMode("normal");
+				return;
+			}
+			this.handleModalKey(data); // clears pending/visual
+			this.tui.requestRender();
+			return;
+		}
+		if (this.mode === "insert") {
+			super.handleInput(data);
+			return;
+		}
+		// Pasting while in a modal mode → flip to INSERT and let it through
+		if (data.startsWith("\u001b[200~")) {
+			this.setMode("insert");
+			super.handleInput(data);
+			return;
+		}
+		if (matchesKey(data, "ctrl+c")) {
+			super.handleInput(data); // interrupt passthrough
+			return;
+		}
+		if (this.passThroughAppKey(data)) {
+			super.handleInput(data); // app/extension shortcuts work in all modes
+			return;
+		}
+		this.handleModalKey(data);
+		this.tui.requestRender();
+	}
+
+	/** Keys handled by the app (not text editing): extension shortcuts + app actions. */
+	private passThroughAppKey(data: string): boolean {
+		if (vimBridge.opener && matchesKey(data, vimBridge.opener)) return true;
+		const self = this as unknown as {
+			keybindings: { matches(d: string, a: string): boolean };
+			actionHandlers: Map<string, () => void>;
+		};
+		if (self.keybindings.matches(data, "app.clipboard.pasteImage")) return true;
+		for (const action of self.actionHandlers.keys()) {
+			if (action === "app.interrupt" || action === "app.exit") continue;
+			if (self.keybindings.matches(data, action)) return true;
+		}
+		return false;
+	}
+
+	// ------------------------------------------------------------ modal key handling
+
+	private handleModalKey(data: string): void {
+		const e = this.ed();
+		const st = e.state;
+		const visual = this.mode === "visual" || this.mode === "visual-line";
+
+		if (matchesKey(data, "escape")) {
+			if (visual) this.setMode("normal");
+			else this.setMode(this.mode); // clears pending states
+			return;
+		}
+
+		if (data === " ") {
+			// leader → open the root hotkeys modal, which-key style
+			vimBridge.openLauncher?.();
+			return;
+		}
+
+		if (!visual && this.pendingReplace) {
+			this.pendingReplace = false;
+			if (isPrintable(data)) this.replaceChar(data);
+			else this.syncModeUI();
+			return;
+		}
+
+		if (!visual && this.pendingOp) {
+			this.handleOperator(data);
+			return;
+		}
+
+		if (this.tryMotion(data)) return;
+
+		if (visual) {
+			if (data === "d" || data === "x") {
+				this.deleteSel();
+				this.setMode("normal");
+				return;
+			}
+			if (data === "y") {
+				this.yankSel();
+				this.setMode("normal");
+				return;
+			}
+			if (data === "c") {
+				this.deleteSel();
+				this.setMode("insert");
+				return;
+			}
+			if (data === "v") {
+				if (this.mode === "visual") this.setMode("normal");
+				else {
+					// visual-line → charwise visual, keep selection anchor
+					this.anchor = { line: st.cursorLine, col: st.cursorCol };
+					this.setMode("visual");
+				}
+				return;
+			}
+			if (data === "V") {
+				if (this.mode === "visual-line") this.setMode("normal");
+				else {
+					// charwise visual → linewise visual, keep selection anchor
+					this.anchor = { line: st.cursorLine, col: st.cursorCol };
+					this.setMode("visual-line");
+				}
+				return;
+			}
+			if (data === "i" || data === "a") {
+				// leave visual into INSERT at selection start (i) or after end (a)
+				const { start, end } = this.selRange();
+				const target = this.mode === "visual-line"
+					? data === "i"
+						? { line: start.line, col: 0 }
+						: { line: end.line, col: (st.lines[end.line] ?? "").length }
+					: data === "i"
+						? start
+						: { line: end.line, col: Math.min(end.col + 1, (st.lines[end.line] ?? "").length) };
+				st.cursorLine = target.line;
+				e.setCursorCol(target.col);
+				this.setMode("insert");
+				return;
+			}
+			return; // swallow everything else in visual
+		}
+
+		// NORMAL mode commands
+		const enterInsert = (line?: number, col?: number) => {
+			if (line !== undefined) st.cursorLine = line;
+			if (col !== undefined) e.setCursorCol(col);
+			this.setMode("insert");
+		};
+		switch (data) {
+			case "i":
+				this.setMode("insert");
+				return;
+			case "I":
+				enterInsert(st.cursorLine, firstNonBlank(st.lines[st.cursorLine] ?? ""));
+				return;
+			case "a":
+				enterInsert(st.cursorLine, Math.min(st.cursorCol + 1, (st.lines[st.cursorLine] ?? "").length));
+				return;
+			case "A":
+				enterInsert(st.cursorLine, (st.lines[st.cursorLine] ?? "").length);
+				return;
+			case "o": {
+				e.pushUndoSnapshot();
+				st.lines.splice(st.cursorLine + 1, 0, "");
+				st.cursorLine++;
+				e.onChange?.(e.getText());
+				enterInsert(st.cursorLine, 0);
+				return;
+			}
+			case "O": {
+				e.pushUndoSnapshot();
+				st.lines.splice(st.cursorLine, 0, "");
+				e.onChange?.(e.getText());
+				enterInsert(st.cursorLine, 0);
+				return;
+			}
+			case "x":
+				this.deleteCharAt(1);
+				return;
+			case "X":
+				this.deleteCharAt(-1);
+				return;
+			case "r":
+				this.pendingReplace = true;
+				return;
+			case "s": {
+				const line = st.lines[st.cursorLine] ?? "";
+				if (st.cursorCol < line.length) this.deleteCharAt(1);
+				this.setMode("insert");
+				return;
+			}
+			case "S": {
+				e.pushUndoSnapshot();
+				this.register = { type: "line", text: (st.lines[st.cursorLine] ?? "") + "\n" };
+				st.lines[st.cursorLine] = "";
+				e.setCursorCol(0);
+				e.onChange?.(e.getText());
+				this.setMode("insert");
+				return;
+			}
+			case "J": {
+				if (st.cursorLine < st.lines.length - 1) {
+					e.pushUndoSnapshot();
+					const cur = st.lines[st.cursorLine] ?? "";
+					const next = st.lines[st.cursorLine + 1] ?? "";
+					st.lines[st.cursorLine] = cur + next;
+					st.lines.splice(st.cursorLine + 1, 1);
+					e.setCursorCol(cur.length);
+					e.onChange?.(e.getText());
+				}
+				return;
+			}
+			case "D":
+				e.deleteToEndOfLine();
+				return;
+			case "v":
+				this.startVisual(false);
+				return;
+			case "V":
+				this.startVisual(true);
+				return;
+			case "C":
+				e.deleteToEndOfLine();
+				this.setMode("insert");
+				return;
+			case "d":
+			case "c":
+			case "y":
+				this.pendingOp = data as "d" | "c" | "y";
+				return;
+			case "Y":
+				this.register = { type: "line", text: (st.lines[st.cursorLine] ?? "") + "\n" };
+				return;
+			case "u":
+				e.undo();
+				return;
+			case "p":
+				this.paste(true);
+				return;
+			case "P":
+				this.paste(false);
+				return;
+		}
+		if (matchesKey(data, "return")) {
+			super.handleInput(data); // submit from NORMAL
+			return;
+		}
+		// Unknown keys are swallowed so text is never inserted outside INSERT
+	}
+
+	// ------------------------------------------------------------ motions (shared NORMAL/VISUAL)
+
+	private tryMotion(data: string): boolean {
+		const e = this.ed();
+		const st = e.state;
+		const jump = (p: Pos) => {
+			st.cursorLine = Math.max(0, Math.min(p.line, st.lines.length - 1));
+			e.setCursorCol(Math.max(0, Math.min(p.col, (st.lines[st.cursorLine] ?? "").length)));
+		};
+		if (data === "h" || matchesKey(data, "left")) {
+			e.moveCursor(0, -1);
+			return true;
+		}
+		if (data === "l" || matchesKey(data, "right")) {
+			e.moveCursor(0, 1);
+			return true;
+		}
+		if (data === "j" || matchesKey(data, "down")) {
+			e.moveCursor(1, 0);
+			return true;
+		}
+		if (data === "k" || matchesKey(data, "up")) {
+			e.moveCursor(-1, 0);
+			return true;
+		}
+		if (data === "0") {
+			e.setCursorCol(0);
+			return true;
+		}
+		if (data === "^") {
+			e.setCursorCol(firstNonBlank(st.lines[st.cursorLine] ?? ""));
+			return true;
+		}
+		if (data === "$") {
+			e.setCursorCol((st.lines[st.cursorLine] ?? "").length);
+			return true;
+		}
+		if (data === "g") {
+			if (this.pendingG) {
+				this.pendingG = false;
+				jump({ line: 0, col: 0 });
+			} else {
+				this.pendingG = true;
+			}
+			return true;
+		}
+		this.pendingG = false;
+		if (data === "G") {
+			st.cursorLine = st.lines.length - 1;
+			e.setCursorCol(0);
+			return true;
+		}
+		if (data === "w") {
+			jump(wordForward(st.lines, { line: st.cursorLine, col: st.cursorCol }));
+			return true;
+		}
+		if (data === "b") {
+			jump(wordBack(st.lines, { line: st.cursorLine, col: st.cursorCol }));
+			return true;
+		}
+		if (data === "e") {
+			jump(wordEnd(st.lines, { line: st.cursorLine, col: st.cursorCol }));
+			return true;
+		}
+		if (matchesKey(data, "ctrl+d")) {
+			e.pageScroll(1);
+			return true;
+		}
+		if (matchesKey(data, "ctrl+u")) {
+			e.pageScroll(-1);
+			return true;
+		}
+		return false;
+	}
+
+	// ------------------------------------------------------------ operators (d/y/c + motion)
+
+	private handleOperator(data: string): void {
+		const op = this.pendingOp!;
+		this.pendingOp = undefined;
+		const e = this.ed();
+		const st = e.state;
+		const cur = (): Pos => ({ line: st.cursorLine, col: st.cursorCol });
+
+		// dd / cc / yy — linewise
+		if (data === "d" || data === "c" || (op === "y" && data === "y")) {
+			if (op === "y") {
+				this.register = { type: "line", text: (st.lines[st.cursorLine] ?? "") + "\n" };
+				return;
+			}
+			e.pushUndoSnapshot();
+			const line = st.lines[st.cursorLine] ?? "";
+			this.register = { type: "line", text: line + "\n" };
+			if (op === "d") {
+				st.lines.splice(st.cursorLine, 1);
+				if (st.lines.length === 0) st.lines.push("");
+				st.cursorLine = Math.min(st.cursorLine, st.lines.length - 1);
+				e.setCursorCol(0);
+				e.onChange?.(e.getText());
+			} else {
+				st.lines[st.cursorLine] = "";
+				e.setCursorCol(0);
+				e.onChange?.(e.getText());
+				this.setMode("insert");
+			}
+			return;
+		}
+
+		// motion targets, end-exclusive
+		const start = cur();
+		let end: Pos | undefined;
+		if (data === "w") end = wordForward(st.lines, start);
+		else if (data === "b") end = start;
+		else if (data === "e") {
+			const p = wordEnd(st.lines, start);
+			end = { line: p.line, col: p.col + 1 };
+		} else if (data === "$") end = { line: st.cursorLine, col: (st.lines[st.cursorLine] ?? "").length };
+		else if (data === "0") end = { line: st.cursorLine, col: 0 };
+		else if (data === "^") end = { line: st.cursorLine, col: firstNonBlank(st.lines[st.cursorLine] ?? "") };
+		else if (data === "h") end = { line: st.cursorLine, col: Math.max(0, st.cursorCol - 1) };
+		else if (data === "l") end = { line: st.cursorLine, col: Math.min(st.cursorCol + 1, (st.lines[st.cursorLine] ?? "").length) };
+		if (!end) return;
+
+		if (op === "y") {
+			this.register = { type: "char", text: this.extractRange(start, end) };
+			return;
+		}
+		e.pushUndoSnapshot();
+		this.deleteRange(start, end);
+		this.register = { type: "char", text: this.lastDeleted ?? "" };
+		this.lastDeleted = undefined;
+		e.onChange?.(e.getText());
+		if (op === "c") this.setMode("insert");
+	}
+
+	private lastDeleted: string | undefined;
+
+	// ------------------------------------------------------------ ranges
+
+	private selRange(): { start: Pos; end: Pos } {
+		const e = this.ed();
+		const a = this.anchor ?? { line: e.state.cursorLine, col: e.state.cursorCol };
+		const c = { line: e.state.cursorLine, col: e.state.cursorCol };
+		const fwd = a.line < c.line || (a.line === c.line && a.col <= c.col);
+		return fwd ? { start: a, end: c } : { start: c, end: a };
+	}
+
+	private extractRange(start: Pos, end: Pos): string {
+		const lines = this.ed().state.lines;
+		if (start.line === end.line) return (lines[start.line] ?? "").slice(start.col, end.col);
+		const parts: string[] = [(lines[start.line] ?? "").slice(start.col)];
+		for (let l = start.line + 1; l < end.line; l++) parts.push(lines[l] ?? "");
+		parts.push((lines[end.line] ?? "").slice(0, end.col));
+		return parts.join("\n");
+	}
+
+	/** Delete [start, end); captures removed text in this.lastDeleted. */
+	private deleteRange(start: Pos, end: Pos): void {
+		const e = this.ed();
+		const lines = e.state.lines;
+		if (start.line === end.line) {
+			const l = lines[start.line] ?? "";
+			this.lastDeleted = l.slice(start.col, end.col);
+			lines[start.line] = l.slice(0, start.col) + l.slice(end.col);
+		} else {
+			const first = (lines[start.line] ?? "").slice(0, start.col);
+			const last = (lines[end.line] ?? "").slice(end.col);
+			this.lastDeleted = this.extractRange(start, end);
+			lines.splice(start.line, end.line - start.line + 1, first + last);
+		}
+		e.state.cursorLine = start.line;
+		e.setCursorCol(Math.min(start.col, (lines[start.line] ?? "").length));
+	}
+
+	private deleteSel(): void {
+		const e = this.ed();
+		e.pushUndoSnapshot();
+		if (this.mode === "visual-line") {
+			const { start, end } = this.selRange();
+			const removed = e.state.lines.splice(start.line, end.line - start.line + 1);
+			this.register = { type: "line", text: removed.join("\n") + "\n" };
+			if (e.state.lines.length === 0) e.state.lines.push("");
+			e.state.cursorLine = Math.min(start.line, e.state.lines.length - 1);
+			e.setCursorCol(0);
+			e.onChange?.(e.getText());
+			return;
+		}
+		const { start, end } = this.selRange();
+		this.deleteRange(start, { line: end.line, col: end.col + 1 });
+		this.register = { type: "char", text: this.lastDeleted ?? "" };
+		this.lastDeleted = undefined;
+		e.onChange?.(e.getText());
+	}
+
+	private yankSel(): void {
+		const { start, end } = this.selRange();
+		if (this.mode === "visual-line") {
+			const out: string[] = [];
+			for (let l = start.line; l <= end.line; l++) out.push(this.ed().state.lines[l] ?? "");
+			this.register = { type: "line", text: out.join("\n") + "\n" };
+			return;
+		}
+		this.register = { type: "char", text: this.extractRange(start, { line: end.line, col: end.col + 1 }) };
+	}
+
+	// ------------------------------------------------------------ misc commands
+
+	private deleteCharAt(dir: 1 | -1): void {
+		const e = this.ed();
+		const st = e.state;
+		const line = st.lines[st.cursorLine] ?? "";
+		const col = st.cursorCol;
+		if (dir === 1 && col < line.length) {
+			e.pushUndoSnapshot();
+			this.register = { type: "char", text: line[col] ?? "" };
+			st.lines[st.cursorLine] = line.slice(0, col) + line.slice(col + 1);
+			e.setCursorCol(Math.min(col, (st.lines[st.cursorLine] ?? "").length));
+			e.onChange?.(e.getText());
+		} else if (dir === -1 && col > 0) {
+			e.pushUndoSnapshot();
+			this.register = { type: "char", text: line[col - 1] ?? "" };
+			st.lines[st.cursorLine] = line.slice(0, col - 1) + line.slice(col);
+			e.setCursorCol(col - 1);
+			e.onChange?.(e.getText());
+		}
+	}
+
+	private replaceChar(ch: string): void {
+		const e = this.ed();
+		const st = e.state;
+		const line = st.lines[st.cursorLine] ?? "";
+		if (st.cursorCol >= line.length) return; // vim: r at EOL does nothing
+		e.pushUndoSnapshot();
+		st.lines[st.cursorLine] = line.slice(0, st.cursorCol) + ch + line.slice(st.cursorCol + 1);
+		e.setCursorCol(st.cursorCol);
+		e.onChange?.(e.getText());
+		this.syncModeUI();
+	}
+
+	private paste(after: boolean): void {
+		const e = this.ed();
+		const reg = this.register;
+		if (!reg) return;
+		e.pushUndoSnapshot();
+		const st = e.state;
+		if (reg.type === "line") {
+			const at = st.cursorLine + (after ? 1 : 0);
+			st.lines.splice(at, 0, ...reg.text.replace(/\n$/, "").split("\n"));
+			st.cursorLine = at;
+			e.setCursorCol(0);
+		} else {
+			const line = st.lines[st.cursorLine] ?? "";
+			const col = st.cursorCol + (after && line.length > 0 ? 1 : 0);
+			st.lines[st.cursorLine] = line.slice(0, col) + reg.text + line.slice(col);
+			// vim: p → cursor on last pasted char, P → cursor on first pasted char
+			e.setCursorCol(after ? col + reg.text.length - 1 : col);
+		}
+		e.onChange?.(e.getText());
+	}
+
+	/**
+	 * Mode-shaped cursor: thin bar in INSERT, block elsewhere. The editor draws a
+	 * fake cursor as a reverse-video cell; rewrite it after super.render().
+	 */
+	render(width: number): string[] {
+		const lines = super.render(width);
+		if (this.mode !== "insert") return lines;
+		// Underline the cursor char instead of swapping in ▏: terminal cursor is a
+		// fake reverse-video cell, so a bar glyph would hide the char underneath.
+		return lines.map((line) => {
+			const m = line.match(/\x1b\[7m([^\x1b]*)\x1b\[0m/);
+			if (!m) return line;
+			const ch = m[1] || " ";
+			const colored = uiCtx?.ui.theme ? uiCtx.ui.theme.fg("accent", ch) : ch;
+			return line.replace(/\x1b\[7m([^\x1b]*)\x1b\[0m/, `\x1b[4m${colored}\x1b[24m`);
+		});
+	}
+
+	/** Enter visual mode (used by modals/tests too). */
+	startVisual(linewise: boolean): void {
+		const st = this.ed().state;
+		this.anchor = { line: st.cursorLine, col: st.cursorCol };
+		this.mode = linewise ? "visual-line" : "visual";
+		this.syncModeUI();
+	}
+}
+
+function applyVimEditor(ctx: ExtensionContext): void {
+	if (!ctx.hasUI) return;
+	uiCtx = ctx;
+	if (vimEnabled) {
+		if (vimBridge.editor) return; // already installed
+		ctx.ui.setEditorComponent((tui, theme, keybindings) => {
+			const ed = new VimEditor(tui, theme, keybindings);
+			vimBridge.editor = ed;
+			ed.setMode("insert");
+			return ed;
+		});
+	} else {
+		ctx.ui.setEditorComponent(undefined);
+		vimBridge.editor = undefined;
+		if (ctx.hasUI) ctx.ui.setStatus("hotvim", undefined);
+	}
+}
+
 // ---------------------------------------------------------------- modal component
 
-type ListKind = "models" | "roles" | "skills" | "sessions" | "actions";
+type ListKind = "models" | "roles" | "skills" | "sessions" | "actions" | "copy";
 
 type SelectionResult =
 	| { kind: "model"; value: string }
 	| { kind: "role"; value: string }
 	| { kind: "skill"; value: string }
 	| { kind: "session"; value: string }
+	| { kind: "copyLast" }
+	| { kind: "copyContext" }
 	| { kind: "direct"; def: ActionDef };
 
 interface Deps {
@@ -375,7 +1163,13 @@ class HotkeysModal implements Focusable {
 		private tui: TUI,
 		private done: (result: SelectionResult | undefined) => void,
 		private deps: Deps,
-	) {}
+		initialAction?: string,
+	) {
+		if (initialAction) {
+			const def = deps.actionByKey(initialAction);
+			if (def) this.runDef(def);
+		}
+	}
 
 	// ------------------------------------------------------------ input
 
@@ -390,8 +1184,19 @@ class HotkeysModal implements Focusable {
 			this.done(undefined);
 			return;
 		}
+		if (data === "i") {
+			// `i` from anywhere → close modal, focus input in INSERT
+			vimBridge.editor?.setMode("insert");
+			this.done(undefined);
+			return;
+		}
+		if (data === "y") {
+			this.openList("copy", "");
+			return;
+		}
 		if (data === "/") {
 			this.openList("actions", "");
+			this.filterMode = true; // straight into free-text search
 			return;
 		}
 		const def = this.deps.actionByKey(data);
@@ -439,12 +1244,21 @@ class HotkeysModal implements Focusable {
 			this.back();
 			return;
 		}
+		if (data === "i") {
+			vimBridge.editor?.setMode("insert");
+			this.done(undefined);
+			return;
+		}
 		if (data === "/") {
 			this.filterMode = true;
 			return;
 		}
 		if (matchesKey(data, "return")) {
 			this.confirm();
+			return;
+		}
+		if (this.kind === "copy" && (data === "l" || data === "f")) {
+			this.done(data === "f" ? { kind: "copyContext" } : { kind: "copyLast" });
 			return;
 		}
 		if (data === "j") {
@@ -561,6 +1375,10 @@ class HotkeysModal implements Focusable {
 			this.done({ kind: "session", value });
 			return;
 		}
+		if (this.kind === "copy") {
+			this.done(value === "context" ? { kind: "copyContext" } : { kind: "copyLast" });
+			return;
+		}
 		// actions view: value is the action key
 		const def = this.deps.actionByKey(value);
 		if (def) this.runDef(def);
@@ -597,11 +1415,12 @@ class HotkeysModal implements Focusable {
 			const vis = visibleWidth(s);
 			return s + " ".repeat(Math.max(0, len - vis));
 		};
-		const row = (content: string) => th.fg("border", "│") + pad(content, innerW) + th.fg("border", "│");
+		const row = (content: string) => th.fg("accent", "│") + pad(content, innerW) + th.fg("accent", "│");
 
-		lines.push(th.fg("border", `╭${"─".repeat(innerW)}╮`));
+		lines.push(th.fg("accent", `╭${"─".repeat(innerW)}╮`));
 
 		if (this.view === "root") {
+			lines.push(row(""));
 			lines.push(row(` ${th.fg("accent", th.bold("⌨ hotkeys"))}`));
 			lines.push(row(""));
 
@@ -610,25 +1429,8 @@ class HotkeysModal implements Focusable {
 				.map(([key, def]) => [key, actionLabel(key, def)] as const)
 				.sort(([a], [b]) => a.localeCompare(b));
 
-			const twoCols = entries.length > 6;
-			const colWidth = twoCols
-				? Math.max(...entries.map(([, label]) => label.length)) + 5
-				: 0;
-
 			if (entries.length === 0) {
 				lines.push(row(` ${th.fg("dim", "(no actions configured)")}`));
-			} else if (twoCols) {
-				const rows = Math.ceil(entries.length / 2);
-				for (let i = 0; i < rows; i++) {
-					const left = entries[i]!;
-					const right = entries[i + rows];
-					const cell = (e: readonly [string, string]) =>
-						` ${th.fg("accent", th.bold(e[0]))}  ${th.fg("text", e[1])}`;
-					const content = right
-						? pad(cell(left), colWidth + 2) + cell(right)
-						: cell(left);
-					lines.push(row(content));
-				}
 			} else {
 				for (const [key, label] of entries) {
 					lines.push(row(` ${th.fg("accent", th.bold(key))}  ${th.fg("text", label)}`));
@@ -638,11 +1440,12 @@ class HotkeysModal implements Focusable {
 			lines.push(row(""));
 			lines.push(
 				row(
-					` ${th.fg("dim", "/")} ${th.fg("dim", "search")}   ${th.fg("dim", "esc")} ${th.fg("dim", "quit")}`,
+					` ${th.fg("dim", "i")} ${th.fg("dim", "insert")}   ${th.fg("dim", "␣")} ${th.fg("dim", "leader")}   ${th.fg("dim", "/")} ${th.fg("dim", "search")}   ${th.fg("dim", "esc")} ${th.fg("dim", "quit")}`,
 				),
 			);
+			lines.push(row(""));
 		} else {
-			const title = this.kind === "models" ? "models" : this.kind === "roles" ? "roles" : this.kind === "skills" ? "skills" : this.kind === "sessions" ? "sessions" : "actions";
+			const title = this.kind === "models" ? "models" : this.kind === "roles" ? "roles" : this.kind === "skills" ? "skills" : this.kind === "sessions" ? "sessions" : this.kind === "copy" ? "copy" : "actions";
 			lines.push(row(` ${th.fg("accent", th.bold(title))}`));
 
 			// Filter row (always shown in list view so / state is visible)
@@ -671,7 +1474,7 @@ class HotkeysModal implements Focusable {
 			);
 		}
 
-		lines.push(th.fg("border", `╰${"─".repeat(innerW)}╯`));
+		lines.push(th.fg("accent", `╰${"─".repeat(innerW)}╯`));
 		return lines;
 	}
 
@@ -687,6 +1490,7 @@ export default function (pi: ExtensionAPI) {
 	// Shortcut registration happens at factory time, so the opener key is read
 	// from the global config only. Use /reload after changing it.
 	const globalConfig = readGlobalConfig();
+	vimBridge.opener = (globalConfig.opener ?? "super+e") as KeyId;
 	let config = globalConfig;
 	let mruModels: string[] = [];
 
@@ -762,6 +1566,12 @@ export default function (pi: ExtensionAPI) {
 				}
 				// sessions list is loaded async via deps.loadSessions (buildItems is sync)
 				if (kind === "sessions") return [];
+				if (kind === "copy") {
+					return [
+						{ value: "last", label: "  l  last output", description: "copy most recent assistant message" },
+						{ value: "context", label: "  f  full context", description: "copy full conversation context" },
+					];
+				}
 				// actions
 				return Object.entries(config.actions ?? {})
 					.filter(([key]) => key.length === 1)
@@ -775,20 +1585,24 @@ export default function (pi: ExtensionAPI) {
 		};
 	}
 
-	async function open(ctx: ExtensionContext): Promise<void> {
+	async function open(ctx: ExtensionContext, initialAction?: string): Promise<void> {
 		if (!ctx.hasUI) return;
+		uiCtx = ctx;
+		vimBridge.openLauncher = (action?: string) => {
+			void open(ctx, action);
+		};
 		// Refresh config so edits to hotkeys.json/roles.json take effect without /reload
 		config = loadConfig(ctx);
 
 		const result = await ctx.ui.custom<SelectionResult | undefined>(
-			(tui, theme, _kb, done) => new HotkeysModal(theme, tui, done, buildDeps(ctx)),
+			(tui, theme, _kb, done) => new HotkeysModal(theme, tui, done, buildDeps(ctx), initialAction),
 			{
 				overlay: true,
 				overlayOptions: {
 					anchor: "center",
 					width: (config.width ?? "50%") as SizeValue,
 					minWidth: 40,
-					maxHeight: (config.maxHeight ?? "80%") as SizeValue,
+					maxHeight: (config.maxHeight ?? "90%") as SizeValue,
 					margin: 1,
 				},
 			},
@@ -820,6 +1634,21 @@ export default function (pi: ExtensionAPI) {
 			}
 			mruModels = [result.value, ...mruModels.filter((k) => k !== result.value)].slice(0, MRU_MAX);
 			pi.appendEntry(MRU_ENTRY, { models: mruModels });
+			return;
+		}
+
+		if (result.kind === "copyLast" || result.kind === "copyContext") {
+			const text = result.kind === "copyLast" ? lastOutputText(ctx) : fullContextText(ctx);
+			if (!text || !text.trim()) {
+				notify("hotkeys: nothing to copy yet", "warning");
+				return;
+			}
+			try {
+				await copyToClipboard(text);
+				notify("copied to clipboard", "info");
+			} catch {
+				notify("hotkeys: clipboard unavailable", "error");
+			}
 			return;
 		}
 
@@ -918,6 +1747,11 @@ export default function (pi: ExtensionAPI) {
 
 	pi.on("session_start", async (_event, ctx) => {
 		config = loadConfig(ctx);
+		vimEnabled = config.vim ?? true;
+		applyVimEditor(ctx);
+		vimBridge.openLauncher = (action?: string) => {
+			if (uiCtx) void open(uiCtx, action);
+		};
 		// Restore model MRU from session entries
 		for (const entry of ctx.sessionManager.getBranch()) {
 			if (entry.type === "custom" && entry.customType === MRU_ENTRY) {
@@ -925,5 +1759,14 @@ export default function (pi: ExtensionAPI) {
 				if (Array.isArray(data?.models)) mruModels = data!.models!.slice(0, MRU_MAX);
 			}
 		}
+	});
+
+	pi.registerCommand("vim-mode", {
+		description: "Toggle vim input mode (NORMAL/INSERT/VISUAL in the prompt editor)",
+		handler: async (_args, ctx) => {
+			vimEnabled = !vimEnabled;
+			applyVimEditor(ctx);
+			if (ctx.hasUI) ctx.ui.notify(`vim mode ${vimEnabled ? "enabled" : "disabled"}`, "info");
+		},
 	});
 }

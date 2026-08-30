@@ -1,5 +1,6 @@
 {
   "enabled": true,
+  "hideStatus": true,
   "allowBrowserProcess": true,
   "network": {
     "allowLocalBinding": true,

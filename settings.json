@@ -1,7 +1,7 @@
 {
   "defaultModel": "claude-sonnet-5",
   "defaultProvider": "anthropic-vertex",
-  "lastChangelogVersion": "0.84.3",
+  "lastChangelogVersion": "0.84.4",
   "packages": [
     "npm:pi-zentui",
     "npm:@hypabolic/pi-hypa",

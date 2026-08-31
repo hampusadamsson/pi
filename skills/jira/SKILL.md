@@ -11,7 +11,7 @@ Tool prefix `atlassian_jira_*`. MCP only, never REST/CLI.
 
 1. **Dedupe first**: `atlassian_jira_search({ jql, limit, fields })`.
 2. **Read**: `get_issue({ issue_key, fields: "*all", include: "transitions,comments" })`.
-3. **Discover schema before creating**: `get_project_issue_types`, `get_create_fields`, `get_field_options`, `search_fields` (fuzzy field-ID lookup).
+3. **Discover schema before creating**: `get_project_issue_types` (get `issue_type_id`, e.g. Task=12197), `get_create_fields({ issue_type_id })` (schema only, no `allowedValues`), `get_field_options` (returns `[]` for DATA multicheckbox custom fields — unreliable), `search_fields` (fuzzy field-ID lookup).
 4. **Create**: `create_issue` / `batch_create_issues`. Custom fields via `additional_fields` JSON.
 5. **Update**: `update_issue({ issue_key, fields: JSON })`.
 6. **Transition**: check valid transitions (`get_issue` w/ `include: "transitions"` or `get_transitions`) then `transition_issue`.
@@ -47,8 +47,8 @@ Status flow: Backlog → Ready for prio → prioritized → In Progress → Done
 Custom fields (DATA-specific — confirm before reuse elsewhere):
 
 | Field ID | Name | Type | Notes |
-| `customfield_12670` | Area | multi-select | Platform/Analytics/ML/Infra/Data Eng |
-| `customfield_12671` | Task type | multi-select | Feature/Bug/Research/Maintenance/Docs |
+| `customfield_12670` | Area | multicheckbox | verified: `platform` seen — re-sample before use, unverified full list |
+| `customfield_12671` | Task type | multicheckbox | `new-development, maintenance, tech-debt, ad-hoc, onboarding` (lowercase-kebab-case, sampled not guaranteed complete) |
 | `customfield_12704` | Business unit | multi-select | Product/Engineering/Data Science/Finance |
 | `customfield_12873` | Epic Horizon | single-select | Q1/Q2/H2 2025, Future, On-Demand |
 | `customfield_10021` | Flagged | multi-checkbox | blockers/needs-attention |
@@ -57,7 +57,25 @@ Custom fields (DATA-specific — confirm before reuse elsewhere):
 | `customfield_10017` | Issue color | string | Epic only |
 | `customfield_10000`/`10668`/`10749` | Development/Design/Vulnerability | integration | auto-populated, never set manually |
 
-Fetch valid select values via `get_field_options` first.
+Fetch valid select values via `get_field_options` first (works for some fields — see below for DATA multicheckbox exceptions).
+
+## Custom field values (DATA multicheckbox fields)
+
+`get_field_options` returns `[]` for these. `get_create_fields` needs `issue_type_id`
+(not `project_key`+`issue_type`) and returns schema without `allowedValues` anyway.
+Enumerate from existing issues instead — single ordering is incomplete, run several:
+
+```
+jira_search({ jql: 'project=DATA AND "Task type" is not EMPTY ORDER BY created DESC',
+  limit: 20, fields: 'customfield_12671' })
+```
+
+Values are lowercase-kebab-case. Treat as sampled, not exhaustive — verify before reuse.
+
+## mcpScript result shape
+
+Result unwraps as `JSON.parse(r.data.content[0].text)`, not `r.data` directly (FastMCP wrapping).
+Keep `limit <= 20` — larger results silently omitted by output size guard.
 
 ```
 create_issue({ project_key: "DATA", issue_type: "Task", summary, description,

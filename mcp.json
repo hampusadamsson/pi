@@ -3,6 +3,12 @@
     "mcpFooterStatus": "off"
   },
   "mcpServers": {
+    "mysharedbrain": {
+      "type": "remote",
+      "url": "https://mysharedbrain.haadpi.duckdns.org:9443/mcp/",
+      "caFile": "~/.pi/agent/certs/mysharedbrain.pem",
+      "enabled": true
+    },
     "snowflake": {
       "type": "remote",
       "url": "https://snowflake-agentic-poc-mcp.data.stage.lendo.dev/mcp",
@@ -17,7 +23,7 @@
       ],
       "env": {
         "HUMIO_TOKEN": "${HUMIO_TOKEN}",
-        "HUMIO_ENDPOINT": "https://cloud.humio.com"
+        "HUMIO_ENDPOINT": "https://lendo.logscale.eu-1.crowdstrike.com"
       }
     },
     "atlassian": {
@@ -28,10 +34,8 @@
       "env": {
         "CONFLUENCE_URL": "https://schibstedio.atlassian.net/wiki",
         "CONFLUENCE_USERNAME": "hampus.adamsson@m10s.io",
-        "CONFLUENCE_API_TOKEN": "${ATLASSIAN_API_TOKEN}",
         "JIRA_URL": "https://schibstedio.atlassian.net",
         "JIRA_USERNAME": "hampus.adamsson@m10s.io",
-        "JIRA_API_TOKEN": "${ATLASSIAN_API_TOKEN}",
         "JIRA_PROJECTS_FILTER": "DATA"
       }
     }

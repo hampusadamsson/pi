@@ -7,13 +7,13 @@ description: Process the Obsidian vault's raw backlog. Use when asked to triage/
 
 Distills `status/raw` daily notes from `0-daily/` into the wiki. Two-phase: scan and propose a plan, then apply it only after explicit approval.
 
-Vault root: `/Users/hampus.adamsson/syncthing/default/obsidian/work/`
+Vault root: `/Users/hampus.adamsson/syncthing/default/obsidian/work/` — all vault I/O via the **mysharedbrain MCP** (note ids = paths without `.md`). Never local file tools on the syncthing path.
 
 ## Safety gates
 
-- Scan/read/search/list: always allowed.
-- Any write (create/update wiki page, update MOC, edit daily note): only after the user approves the plan. Never write mid-scan.
-- The only permitted edit to `0-daily/` is removing the `status/raw` tag. All other daily-note content is untouchable. This overrides the obsidian skill's `0-daily/` read-only rule for that one operation.
+- Scan/read/search/list (`read_note`, `read_notes`, `read_vault_index`, `list_directory`, `search_notes`): always allowed.
+- Any write (`create_note`/`update_note` wiki page, `patch_note` MOC, `set_frontmatter` daily note): only after the user approves the plan. Never write mid-scan.
+- The only permitted edit to `0-daily/` is removing the `status/raw` tag via `set_frontmatter`. All other daily-note content is untouchable. This overrides the obsidian skill's `0-daily/` read-only rule for that one operation.
 - `3-journal/` stays read-only, always.
 
 ## Phase 1 — Scan & plan
@@ -35,11 +35,11 @@ Plan table columns: target page | action (new/update/conflict/reference) | sourc
 
 ## Phase 2 — Apply (only after approval)
 
-1. Create/update wiki pages per the plan, following the vault OKF (see Reference below): YAML frontmatter, no title heading, standard sections, `[[cross-links]]`.
-2. Set `resource:` on every touched page to point back to the source daily note(s).
-3. Update the map `index.md` for any new/renamed page. Cross-link with `[[...]]`.
-4. Remove `status/raw` from each processed daily note's `tags`. Keep every other tag and all body content untouched.
-5. Report: what changed, what remains raw, and which blind spots are still open.
+1. Create/update wiki pages per the plan (`create_note`/`update_note`, mysharedbrain MCP), following the vault OKF (see Reference below): YAML frontmatter, no title heading, standard sections, `[[cross-links]]`.
+2. Set `resource:` on every touched page via `set_frontmatter` to point back to the source daily note(s).
+3. Update the map `index.md` (`patch_note`) for any new/renamed page. Cross-link with `[[...]]`.
+4. Remove `status/raw` from each processed daily note's `tags` via `set_frontmatter`. Keep every other tag and all body content untouched.
+5. Report: what changed, what remains raw, and which blind spots are still open. Extend vault context per APPEND_SYSTEM.md loop — obvious follow-ups via direct MCP update, uncertain ones via `give_feedback` (no approval needed, use freely).
 
 ## Blind spots
 

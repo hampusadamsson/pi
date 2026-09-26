@@ -1,6 +1,6 @@
 # Vault Specification
 
-Vault root: `/Users/hampus.adamsson/syncthing/default/obsidian/work/`
+Vault root: `/Users/hampus.adamsson/syncthing/default/obsidian/work/` — accessed via the **mysharedbrain MCP** (see SKILL.md, "Vault access"). Note ids = paths without `.md`.
 
 Top level. Each map has an `index.md` (MOC) — keep current on add/rename. Max depth 2 under a realm.
 
@@ -74,6 +74,7 @@ Sections: Summary · Lives&Runs · Auth · How-to · Links · Incidents · Depen
 
 - One entity = one page, stable name (no date prefix in wiki). Fold ops/incidents/queries into the owning tool or service page.
 - Cluster (subfolder) only at >4 related pages; else keep flat in the map.
+- All vault I/O via mysharedbrain MCP (`read_note`, `search_notes`, `create_note`, `patch_note`, `set_frontmatter`, ...). Never local file tools on the syncthing path. Prefer `append_note`/`patch_note` over full rewrites; unsure edits → `give_feedback` (queued capture).
 
 ## Note Format & Metadata (OKF)
 
@@ -101,7 +102,7 @@ No title heading in the body — the filename is the title.
 - `type` — matches the primary `type/` tag.
 - `description` — one line, optimised for LLM search.
 - `tags` — hierarchical, from the vocabulary below.
-- `timestamp` — the template shows `{{date}}` as a placeholder for Obsidian's own template-insertion syntax. When the agent creates/edits a page by writing the file directly, substitute the actual current date (`YYYY-MM-DD`) — never leave the literal string `{{date}}` in a saved file.
+- `timestamp` — the template shows `{{date}}` as a placeholder for Obsidian's own template-insertion syntax. When the agent creates/edits a page via `create_note` / `update_note` (mysharedbrain MCP), substitute the actual current date (`YYYY-MM-DD`) — never leave the literal string `{{date}}` in a saved note.
 - `resource` — machine-readable pointer(s) to the source of truth the agent reads to refresh this page (repo path, Confluence URL, Snowflake table, source daily note). For the LLM, not humans. String or list. Human/operational URLs (console stage/prod, dashboards) go in the `# Links` section, not here.
 - `# Links` — in-body table of operational URLs for people: console (stage/prod), docs, dashboards.
 - `owner` — services only: who owns the code (`dml` = ours; `lendo-se`/`lendo-no`/`lendo-pfm` = integrate). Kreddy = `lendo-pfm`.

@@ -21,23 +21,6 @@
       },
       "skills": []
     },
-    "private": {
-      "description": "DS4",
-      "model": "opencode-go/deepseek-v4-pro",
-      "tools": {
-        "allow": [
-          "edit",
-          "write",
-          "hypa_read",
-          "hypa_grep",
-          "hypa_shell",
-          "hypa_find",
-          "hypa_ls"
-        ]
-      },
-      "skills": [],
-      "hidden": false
-    },
     "researcher": {
       "description": "Research assistant with access to all skills (Jira, Confluence, GitHub, Obsidian, Snowflake)",
       "model": "vertex-anthropic/claude-sonnet-5",
@@ -65,19 +48,6 @@
         "vault-daily-raw",
         "vault-maintenance"
       ],
-      "hidden": false
-    },
-    "humio": {
-      "description": "Humio debugger",
-      "model": "vertex-anthropic/claude-sonnet-5",
-      "promptMode": "replace",
-      "systemPrompt": "Use Humio MCP to debug Logs",
-      "tools": {
-        "allow": [
-          "mcp*"
-        ]
-      },
-      "skills": [],
       "hidden": false
     }
   }

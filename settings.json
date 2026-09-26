@@ -1,7 +1,7 @@
 {
   "defaultModel": "claude-sonnet-5",
   "defaultProvider": "anthropic-vertex",
-  "lastChangelogVersion": "0.84.4",
+  "lastChangelogVersion": "0.87.1",
   "packages": [
     "npm:pi-zentui",
     "npm:@hypabolic/pi-hypa",
@@ -11,7 +11,6 @@
     "git:github.com/kdejaeger/pi-scoped-models-extra-info",
     "npm:pi-mcp-adapter",
     "npm:@vanillagreen/pi-session-manager",
-    "npm:pi-subagents",
     "../../../../opt/homebrew/lib/node_modules/@jmfederico/pi-web/dist/pi-packages/relays"
   ],
   "theme": "my-theme",

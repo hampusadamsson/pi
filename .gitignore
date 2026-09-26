@@ -16,3 +16,4 @@ sessions/
 .DS_Store
 npm/node_modules
 /trust.json
+/certs/mysharedbrain.pem

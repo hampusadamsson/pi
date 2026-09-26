@@ -8,12 +8,12 @@ disable-model-invocation: true
 
 Deep maintenance of `1-wiki/`. Run only when the user explicitly asks. Never on your own initiative.
 
-Vault root: `/Users/hampus.adamsson/syncthing/default/obsidian/work/`
+Vault root: `/Users/hampus.adamsson/syncthing/default/obsidian/work/` — all vault I/O via the **mysharedbrain MCP** (note ids = paths without `.md`). Never local file tools on the syncthing path.
 
 ## Safety gates
 
-- Read/scan/search/list: always allowed.
-- Writes: only for items the user explicitly selected. Never apply the whole plan automatically.
+- Read/scan/search/list (`read_note`, `read_notes`, `read_vault_index`, `list_directory`, `search_notes`, `get_frontmatter`, `get_backlinks`, `get_outgoing`, `recent_changes`): always allowed.
+- Writes (`update_note`, `patch_note`, `append_note`, `set_frontmatter`, `move_note`): only for items the user explicitly selected. Never apply the whole plan automatically.
 - `0-daily/` and `3-journal/`: read-only, always.
 - Report before writing. No edits during the scan phase.
 
@@ -21,7 +21,7 @@ Vault root: `/Users/hampus.adamsson/syncthing/default/obsidian/work/`
 
 ### 1. Scan
 
-Index every page in `1-wiki/` plus its `index.md` MOCs. Build the entity list: one entity = one page, stable name, no date prefix. Note each page's frontmatter (`tags`, `status`, `resource`, `owner`), sections, and links.
+Index every page in `1-wiki/` (via `read_vault_index`/`list_directory`) plus its `index.md` MOCs. Build the entity list: one entity = one page, stable name, no date prefix. Note each page's frontmatter (`get_frontmatter`: `tags`, `status`, `resource`, `owner`), sections, and links (`get_outgoing`).
 
 ### 2. Conflict & dedup check
 
@@ -55,10 +55,10 @@ Each bullet: `A1` etc. — page, problem, proposed fix. User replies with letter
 
 ### 6. Apply (selected only)
 
-1. Update content per selection.
-2. Bump metadata: set `timestamp: YYYY-MM-DD` (today's date) in frontmatter on every changed page. One timestamp field only — no second date field.
-3. If merged/renamed: update the map `index.md` and cross-links.
-4. Report what changed and what was left.
+1. Update content per selection via `patch_note`/`update_note` (mysharedbrain MCP).
+2. Bump metadata: `set_frontmatter` with `timestamp: YYYY-MM-DD` (today's date) on every changed page. One timestamp field only — no second date field.
+3. If merged/renamed: `move_note`, update the map `index.md` (`patch_note`), and cross-links.
+4. Report what changed and what was left. Extend vault context per APPEND_SYSTEM.md loop — obvious follow-ups via direct MCP update, uncertain ones via `give_feedback` (no approval needed, use freely).
 
 ## Reference
 

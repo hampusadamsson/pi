@@ -2,13 +2,12 @@
   "name": "pi-extensions",
   "private": true,
   "dependencies": {
-    "@hypabolic/pi-hypa": "^0.1.14",
-    "@vanillagreen/pi-session-manager": "^2.0.0",
+    "@hypabolic/pi-hypa": "^0.1.15",
+    "@vanillagreen/pi-session-manager": "^2.0.1",
     "pi-caveman": "^1.0.8",
-    "pi-mcp-adapter": "^2.31.0",
+    "pi-mcp-adapter": "^2.37.0",
     "pi-profiles": "^0.1.1",
-    "pi-sandbox": "^0.6.5",
-    "pi-subagents": "^0.60.0",
-    "pi-zentui": "^0.21.0"
+    "pi-sandbox": "^0.6.8",
+    "pi-zentui": "^0.25.1"
   }
 }

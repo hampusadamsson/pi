@@ -316,6 +316,11 @@ function rolePromptText(role: RoleConfig, baseDir: string, cwd: string): string 
 // ----------------------------------------------------------------- extension
 
 export default function (pi: ExtensionAPI) {
+	pi.registerFlag("role", {
+		description: "Start with the given role active (see /role)",
+		type: "string",
+	});
+
 	let config: LoadedConfig = { roles: {}, baseDirs: {}, diagnostics: [] };
 	let activeRole: string | undefined;
 	/** Tools active at session start, before any role narrowed the set. */
@@ -447,7 +452,8 @@ export default function (pi: ExtensionAPI) {
 			ctx.ui.notify(`roles config: ${config.diagnostics.join(" | ")}`, "warning");
 		}
 
-		const target = restoreRoleFromSession(ctx);
+		const flagRole = pi.getFlag("role");
+		const target = typeof flagRole === "string" && flagRole.length > 0 ? flagRole : restoreRoleFromSession(ctx);
 		if (target && !config.roles[target]) {
 			if (ctx.hasUI) ctx.ui.notify(`roles: unknown role "${target}"`, "warning");
 			activeRole = undefined;
@@ -455,6 +461,9 @@ export default function (pi: ExtensionAPI) {
 			return;
 		}
 		await applyRole(target, ctx, { quiet: true });
+		if (typeof flagRole === "string" && flagRole.length > 0) {
+			pi.appendEntry(ENTRY_TYPE, { role: target ?? null });
+		}
 	});
 
 	pi.on("before_agent_start", (event, ctx) => {
@@ -468,6 +477,20 @@ export default function (pi: ExtensionAPI) {
 		// without needing a manual role cycle.
 		const selected = resolveTools(role, toolPool());
 		if (selected.length > 0) pi.setActiveTools(selected);
+
+		// Since pi 0.86 the prompt is built from structured sections: skills live in
+		// event.systemPromptOptions.skills and the raw systemPrompt string no longer
+		// contains the <available_skills> block. Filter the array so role skill
+		// allowlists take effect; keep the string filter below as fallback.
+		const skillsOptions = (
+			event as unknown as { systemPromptOptions?: { skills?: { name: string }[] } }
+		).systemPromptOptions;
+		if (skillsOptions?.skills) {
+			const allowedSkills = role.skills ?? [];
+			skillsOptions.skills = skillsOptions.skills.filter((skill) =>
+				matchesAny(skill.name, allowedSkills),
+			);
+		}
 
 		const baseDir = config.baseDirs[activeRole] ?? ctx.cwd;
 		let prompt = filterSkills(event.systemPrompt, role.skills);

@@ -32,9 +32,9 @@
         "mcp-atlassian"
       ],
       "env": {
-        "CONFLUENCE_URL": "https://schibstedio.atlassian.net/wiki",
+        "CONFLUENCE_URL": "https://lendo-group.atlassian.net/wiki",
         "CONFLUENCE_USERNAME": "hampus.adamsson@m10s.io",
-        "JIRA_URL": "https://schibstedio.atlassian.net",
+        "JIRA_URL": "https://lendo-group.atlassian.net",
         "JIRA_USERNAME": "hampus.adamsson@m10s.io",
         "JIRA_PROJECTS_FILTER": "DATA"
       }

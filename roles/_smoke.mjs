@@ -32,6 +32,8 @@ const pi = {
 		return true;
 	},
 	setThinkingLevel: (l) => console.log("setThinkingLevel:", l),
+	registerFlag: (n, o) => console.log("registerFlag:", n, JSON.stringify(o)),
+	getFlag: (n) => (n === "role" ? process.env.SMOKE_ROLE_FLAG : undefined),
 };
 
 mod(pi);

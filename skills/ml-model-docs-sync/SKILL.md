@@ -22,7 +22,8 @@ auto-write.
    docs mention a separate adapter/cluster. Also check adapter repos (e.g.
    `lendo-se/prediction-model-adapters`) when docs reference a fronting adapter.
 3. Confluence ML space (secondary doc, may lag):
-   https://schibstedio.atlassian.net/wiki/spaces/LDML/folder/2475622432/ML+models
+   <https://lendo-group.atlassian.net/wiki/spaces/LDML/folder/2475622432/ML+models>
+   (e.g. dml-refinance-se: <https://lendo-group.atlassian.net/wiki/spaces/LDML/pages/93095526/dml-refinance-se>)
 4. Obsidian wiki (secondary doc, may lag): `1-wiki/` vault, `services/` map (owner: dml)
 
 ## Workflow (per model)

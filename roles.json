@@ -19,7 +19,19 @@
         ],
         "deny": []
       },
-      "skills": []
+      "skills": [
+        "ml-model-docs-sync",
+        "obsidian",
+        "sync-vault-context",
+        "confluence",
+        "vault-daily-raw",
+        "github",
+        "jira",
+        "vault-maintenance",
+        "snowflake",
+        "subagents",
+        "humio"
+      ]
     },
     "researcher": {
       "description": "Research assistant with access to all skills (Jira, Confluence, GitHub, Obsidian, Snowflake)",
@@ -35,8 +47,7 @@
           "hypa_shell",
           "hypa_find",
           "hypa_ls",
-          "mcp*",
-          "subagent*"
+          "mcp*"
         ]
       },
       "skills": [

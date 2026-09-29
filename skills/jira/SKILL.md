@@ -43,6 +43,9 @@ Tool prefix `atlassian_jira_*`. MCP only, never REST/CLI.
 
 Project: DATA (DML Data & Machine Learning). Issue types: Task, Epic, Bug, Subtask.
 Status flow: Backlog → Ready for prio → prioritized → In Progress → Done.
+Board: <https://lendo-group.atlassian.net/jira/software/projects/DATA/boards/347> — links to DML ML Models.
+
+API tokens (create/manage): <https://id.atlassian.com/manage-profile/security/api-tokens>
 
 Custom fields (DATA-specific — confirm before reuse elsewhere):
 

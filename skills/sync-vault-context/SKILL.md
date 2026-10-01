@@ -1,13 +1,13 @@
 ---
 name: sync-vault-context
-description: Reconcile the current conversation context (what was just discussed, learned, decided, fixed) against the Obsidian vault via mysharedbrain. Finds discrepancies between what the session now knows and what the vault says, proposes per-item actions (edit, create, feedback, question), and applies only what the user picks. Use when asked to sync/reconcile/update the vault with what just happened, or at the end of a task to check the vault reflects it.
+description: Reconcile the current conversation context (what was just discussed, learned, decided, fixed) against the Obsidian vault. Finds discrepancies between what the session now knows and what the vault says, proposes per-item actions (edit, create, feedback, question), and applies only what the user picks. Use when asked to sync/reconcile/update the vault with what just happened, or at the end of a task to check the vault reflects it.
 ---
 
 # Sync Vault Context
 
 Takes the current session's context — facts learned, decisions made, problems fixed, commands run, entities touched — and checks it against the vault's canonical pages. Surfaces discrepancies as a numbered list of proposed actions; the user picks which to run.
 
-Vault root: `/Users/hampus.adamsson/syncthing/default/obsidian/work/` — all vault I/O via the **mysharedbrain MCP** (note ids = paths without `.md`). Never local file tools on the syncthing path.
+Vault root: `/Users/hampus.adamsson/syncthing/default/obsidian/work/`
 
 ## Safety gates
 

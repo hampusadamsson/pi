@@ -1,20 +1,15 @@
-# MySharedBrain — persistent context
+Use the Obsidian Vault before acting (see Obsidian skill)
 
-The mysharedbrain MCP is the persistent information vault. Use it every task:
-
-1. **Gather context first** — before acting, consult the vault: `search_notes`, `read_note`, `read_vault_index`, `recent_changes`. Reason from the vault, not from scratch.
-2. **Combine context + instruction** — merge what the user asked with what the vault says (prior knowledge, past decisions, gotchas). Vault facts can refine or restrict the task;
-   surface conflicts to the user.
-3. **Close the loop after the task** — feed what you learned back:
-   - Suggested / uncertain changes → `give_feedback` freely, no approval needed — it only queues for librarian review, never writes directly.
-   - Obvious, uncontroversial update → update the note directly via MCP (`append_note` / `patch_note` / `update_note`).
-   - Always extend context that helps future tasks: commands that worked, errors + fixes, decisions + why, repo/service facts, queries, paths, what is still TODO.
+1. **Gather context first** — before acting, consult the vault.
+2. Solve the task instruction.
+3. Merge, append or remove information in the vault based on your context if applicable. surface conflicts to the user and ask for confirmation before changing the vault.
 
 Rules: concrete over vague (`exact query/command`, not "checked logs"). Search before create. No secrets. No transient chat junk.
 
 # Development Guidelines
 
 Never use kubectl cli.
+Never use gcloud commands that can edit, destroy or otherwise impact services. Read only. Ask if required.
 
 1. Think Before Coding — state assumptions; ask if uncertain. If multiple interpretations exist, list them, don't silently pick one. Flag simpler alternatives and overcomplication. Stop and ask if something's unclear.
 

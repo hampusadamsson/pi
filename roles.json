@@ -3,7 +3,7 @@
   "roles": {
     "work": {
       "description": "Senior full-stack dev, writes and tests code",
-      "model": "vertex-anthropic/claude-sonnet-5",
+      "model": "vertex-anthropic/claude-sonnet-5-5",
       "thinkingLevel": "medium",
       "systemPrompt": "You are a senior full-stack developer focused on writing clean, tested code. Prefer small, verifiable changes. Run tests after edits.",
       "promptMode": "replace",
@@ -35,7 +35,7 @@
     },
     "researcher": {
       "description": "Research assistant with access to all skills (Jira, Confluence, GitHub, Obsidian, Snowflake)",
-      "model": "vertex-anthropic/claude-sonnet-5",
+      "model": "vertex-anthropic/claude-sonnet-5-5",
       "promptMode": "append",
       "systemPromptFile": "prompts/researcher.md",
       "tools": {
@@ -47,6 +47,7 @@
           "hypa_shell",
           "hypa_find",
           "hypa_ls",
+          "subagents",
           "mcp*"
         ]
       },

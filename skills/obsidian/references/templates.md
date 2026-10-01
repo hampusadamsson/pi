@@ -1,8 +1,6 @@
 # Note Templates
 
-Source: vault `template/` directory. Use these to create new pages after user approval, via mysharedbrain MCP `create_note` (id = folder path + page name, no `.md`; replace `{{date}}` with actual date in frontmatter).
-
-`{{date}}` here is Obsidian's own template-insertion placeholder. When the agent creates a note via mysharedbrain MCP (`create_note` / `update_note`), replace it with the actual current date (`YYYY-MM-DD`) — never save a note with the literal string `{{date}}`.
+Source: vault `template/` directory. Use these to create new pages after user approval. `create_note` (id = folder path + page name, no `.md`; replace `{{date}}` with actual date in frontmatter).
 
 ## wiki (canonical)
 

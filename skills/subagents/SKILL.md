@@ -134,6 +134,7 @@ auto-removes session when its command exits).
 ## After the loop — validate output, don't just trust "gone"
 
 Session gone means the command finished, not that it succeeded. For each job:
+
 1. Check the `.exit` file — non-zero means failure, inspect `.out` before reusing results.
 2. Check `.out` isn't empty and doesn't contain a crash signature (stack trace, `ENOENT`,
    "Unknown option", etc).

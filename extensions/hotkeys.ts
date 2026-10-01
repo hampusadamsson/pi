@@ -1153,10 +1153,12 @@ class HotkeysModal implements Focusable {
 	private kind: ListKind = "actions";
 	private query = "";
 	private filterMode = false;
+	private filterIsProvider = false;
 	private pendingG = false;
 	private list: SelectList | undefined;
 	private allItems: SelectItem[] = [];
 	private filteredCount = 0;
+	private modelProviders: string[] = [];
 
 	constructor(
 		private theme: Theme,
@@ -1212,10 +1214,26 @@ class HotkeysModal implements Focusable {
 		const list = this.list;
 		if (!list) return;
 
+		// Provider quick-filter: digits 1-9 narrow the models list by provider,
+		// replacing any existing filter text. Works whether or not already filtering.
+		if (this.kind === "models" && /^[1-9]$/.test(data)) {
+			const provider = this.modelProviders[Number(data) - 1];
+			if (provider) {
+				this.query = provider;
+				// Apply the narrowing filter but leave filterMode off so j/k etc.
+				// immediately navigate the (now-scoped) list instead of editing text.
+				this.filterMode = false;
+				this.filterIsProvider = true;
+				this.applyFilter();
+				return;
+			}
+		}
+
 		if (this.filterMode) {
 			if (matchesKey(data, "escape")) {
 				if (this.query) {
 					this.query = "";
+					this.filterIsProvider = false;
 					this.applyFilter();
 				} else {
 					this.back();
@@ -1227,11 +1245,13 @@ class HotkeysModal implements Focusable {
 				return;
 			}
 			if (matchesKey(data, "backspace")) {
+				this.filterIsProvider = false;
 				this.query = this.query.slice(0, -1);
 				this.applyFilter();
 				return;
 			}
 			if (isPrintable(data)) {
+				this.filterIsProvider = false;
 				this.query += data;
 				this.applyFilter();
 				return;
@@ -1240,7 +1260,18 @@ class HotkeysModal implements Focusable {
 			return;
 		}
 
-		if (matchesKey(data, "escape") || data === "q") {
+		if (matchesKey(data, "escape")) {
+			if (this.query) {
+				// Clear an active filter (including provider quick-filter) first.
+				this.query = "";
+				this.filterIsProvider = false;
+				this.applyFilter();
+			} else {
+				this.back();
+			}
+			return;
+		}
+		if (data === "q") {
 			this.back();
 			return;
 		}
@@ -1303,6 +1334,7 @@ class HotkeysModal implements Focusable {
 		this.kind = kind;
 		this.query = seedQuery;
 		this.filterMode = seedQuery.length > 0;
+		this.filterIsProvider = false;
 
 		if (kind === "sessions") {
 			// Sessions load async; show a placeholder and swap in the real list.
@@ -1314,6 +1346,8 @@ class HotkeysModal implements Focusable {
 		}
 
 		this.allItems = this.deps.buildItems(kind);
+		this.modelProviders =
+			kind === "models" ? Array.from(new Set(this.allItems.map((item) => item.value.split("/")[0]))).sort() : [];
 		this.list = this.newList(this.allItems);
 		this.applyFilter();
 	}
@@ -1330,9 +1364,11 @@ class HotkeysModal implements Focusable {
 	private applyFilter(): void {
 		const list = this.list;
 		if (!list) return;
-		const filtered = this.query
-			? fuzzyFilter(this.allItems, this.query, (item) => `${item.label} ${item.description ?? ""}`)
-			: this.allItems;
+		const filtered = this.filterIsProvider
+			? this.allItems.filter((item) => item.value.startsWith(`${this.query}/`))
+			: this.query
+				? fuzzyFilter(this.allItems, this.query, (item) => `${item.label} ${item.description ?? ""}`)
+				: this.allItems;
 		this.filteredCount = filtered.length;
 		// SelectList.setFilter is prefix-only; swap in fuzzy-filtered items directly
 		const listInternals = this.list as unknown as {
@@ -1350,6 +1386,7 @@ class HotkeysModal implements Focusable {
 		this.list = undefined;
 		this.query = "";
 		this.filterMode = false;
+		this.filterIsProvider = false;
 		this.pendingG = false;
 	}
 
@@ -1466,10 +1503,18 @@ class HotkeysModal implements Focusable {
 				lines.push(row(` ${th.fg("warning", "no matches")}`));
 			}
 
+			if (this.kind === "models" && this.modelProviders.length > 1) {
+				const provHint = this.modelProviders
+					.slice(0, 9)
+					.map((p, i) => `${th.fg("accent", String(i + 1))} ${p}`)
+					.join("  ");
+				lines.push(row(` ${provHint}`));
+			}
+
 			lines.push(row(""));
 			lines.push(
 				row(
-					` ${th.fg("dim", "j/k nav · / filter · enter select · esc back")}`,
+					` ${th.fg("dim", "j/k nav · / filter · 1-9 provider · enter select · esc back")}`,
 				),
 			);
 		}

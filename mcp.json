@@ -4,13 +4,13 @@
   },
   "mcpServers": {
     "mysharedbrain": {
-      "type": "remote",
+      "type": "http",
       "url": "https://mysharedbrain.haadpi.duckdns.org:9443/mcp/",
       "caFile": "~/.pi/agent/certs/mysharedbrain.pem",
       "enabled": true
     },
     "snowflake": {
-      "type": "remote",
+      "type": "http",
       "url": "https://snowflake-agentic-poc-mcp.data.stage.lendo.dev/mcp",
       "enabled": true
     },

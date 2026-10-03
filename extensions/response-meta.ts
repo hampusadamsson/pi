@@ -23,11 +23,6 @@ interface Meta {
 	tools: number;
 }
 
-function normTs(ts: number): number {
-	// turn_start timestamp should be ms; tolerate seconds.
-	return ts < 1e12 ? ts * 1000 : ts;
-}
-
 function clock(ts: number): string {
 	const d = new Date(ts);
 	const p = (n: number) => String(n).padStart(2, "0");
@@ -76,21 +71,26 @@ function line(m: Meta): string {
 }
 
 export default function (pi: ExtensionAPI) {
-	let turnStart = 0;
+	// Timestamp of the previous message (user, assistant or tool result).
+	let lastTs = 0;
 
-	pi.on("agent_start", () => {
-		if (!turnStart) turnStart = Date.now();
-	});
-	pi.on("turn_start", (e) => {
-		turnStart = normTs(e.timestamp);
+	pi.on("session_start", (_e, ctx) => {
+		lastTs = 0;
+		for (const entry of ctx.sessionManager.getBranch()) {
+			if (entry.type === "message") {
+				const ts = (entry.message as { timestamp?: number }).timestamp;
+				if (typeof ts === "number") lastTs = ts;
+			}
+		}
 	});
 
 	pi.on("message_end", (e) => {
 		const msg = e.message;
+		const endTs = Date.now();
+		const prev = lastTs;
+		lastTs = endTs;
 		if (msg.role !== "assistant") return;
-		const endTs = typeof msg.timestamp === "number" ? msg.timestamp : Date.now();
-		const start = turnStart || endTs;
-		const durationMs = endTs >= start && endTs - start <= 3600_000 ? endTs - start : null;
+		const durationMs = prev > 0 && endTs >= prev && endTs - prev <= 3600_000 ? endTs - prev : null;
 		const asst = msg as {
 				timestamp?: number;
 			usage?: { input: number; output: number; cacheRead: number; cost: { total: number } };
@@ -118,7 +118,6 @@ export default function (pi: ExtensionAPI) {
 				? asst.content.filter((b) => b.type === "toolCall").length
 				: 0,
 		});
-		turnStart = 0;
 	});
 
 	pi.registerEntryRenderer<Meta>(TYPE, (entry, _options, theme) => {

@@ -2,11 +2,10 @@
   "name": "pi-extensions",
   "private": true,
   "dependencies": {
-    "@hypabolic/pi-hypa": "^1.0.2",
-    "@vanillagreen/pi-session-manager": "^2.0.2",
-    "pi-caveman": "^1.0.8",
+    "@hypabolic/pi-hypa": "^1.1.0",
+    "@vanillagreen/pi-session-manager": "^2.0.4",
     "pi-profiles": "^0.1.1",
-    "pi-sandbox": "^0.6.9",
-    "pi-zentui": "^0.28.0"
+    "pi-sandbox": "^0.7.1",
+    "pi-zentui": "^0.31.0"
   }
 }

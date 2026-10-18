@@ -29,6 +29,7 @@
  *   INSERT   default mode; esc → NORMAL; status bar shows -- INSERT --
  *   NORMAL   motions h j k l w b e 0 ^ $ gg G · x X r s S · dd dw db de d$ D ·
  *            yy Y p P · cc c$ C · J join · u (undo) · i I a A o O → INSERT ·
+ *            j/k (or ↓/↑) at the last/first line browse prompt history ·
  *            v V → VISUAL · enter submits · ctrl+c passes through
  *   VISUAL   motions extend selection · d/x delete · y yank · c change ·
  *            esc/v exit · border turns warning-colored while active
@@ -441,6 +442,7 @@ interface EditorInternals {
 	pageScroll(direction: -1 | 1): void;
 	pushUndoSnapshot(): void;
 	undo(): void;
+	navigateHistory(direction: -1 | 1): void;
 	getText(): string;
 	onChange?: (text: string) => void;
 }
@@ -826,6 +828,7 @@ class VimEditor extends CustomEditor {
 	private tryMotion(data: string): boolean {
 		const e = this.ed();
 		const st = e.state;
+		const visual = this.mode === "visual" || this.mode === "visual-line";
 		const jump = (p: Pos) => {
 			st.cursorLine = Math.max(0, Math.min(p.line, st.lines.length - 1));
 			e.setCursorCol(Math.max(0, Math.min(p.col, (st.lines[st.cursorLine] ?? "").length)));
@@ -839,11 +842,21 @@ class VimEditor extends CustomEditor {
 			return true;
 		}
 		if (data === "j" || matchesKey(data, "down")) {
-			e.moveCursor(1, 0);
+			// At last line, browse forward through submitted prompt history.
+			if (st.cursorLine >= st.lines.length - 1) {
+				if (!visual) e.navigateHistory(1);
+			} else {
+				e.moveCursor(1, 0);
+			}
 			return true;
 		}
 		if (data === "k" || matchesKey(data, "up")) {
-			e.moveCursor(-1, 0);
+			// At first line, browse back through submitted prompt history.
+			if (st.cursorLine <= 0) {
+				if (!visual) e.navigateHistory(-1);
+			} else {
+				e.moveCursor(-1, 0);
+			}
 			return true;
 		}
 		if (data === "0") {

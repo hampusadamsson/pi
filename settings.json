@@ -1,11 +1,10 @@
 {
   "defaultModel": "claude-sonnet-5",
   "defaultProvider": "anthropic-vertex",
-  "lastChangelogVersion": "1.0.0",
+  "lastChangelogVersion": "1.3.0",
   "packages": [
     "npm:pi-zentui",
     "npm:@hypabolic/pi-hypa",
-    "npm:pi-caveman",
     "npm:pi-profiles",
     "npm:pi-sandbox",
     "git:github.com/kdejaeger/pi-scoped-models-extra-info",
@@ -15,6 +14,7 @@
   "theme": "my-theme",
   "hideThinkingBlock": true,
   "defaultThinkingLevel": "medium",
+  "httpIdleTimeoutMs": 900000,
   "enableInstallTelemetry": false,
   "markdown": {
     "mermaid": "streaming"

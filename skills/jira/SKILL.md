@@ -50,14 +50,14 @@ API tokens (create/manage): <https://id.atlassian.com/manage-profile/security/ap
 Custom fields (DATA-specific — confirm before reuse elsewhere):
 
 | Field ID | Name | Type | Notes |
-| `customfield_12670` | Area | multicheckbox | verified: `platform` seen — re-sample before use, unverified full list |
-| `customfield_12671` | Task type | multicheckbox | `new-development, maintenance, tech-debt, ad-hoc, onboarding` (lowercase-kebab-case, sampled not guaranteed complete) |
-| `customfield_12704` | Business unit | multi-select | Product/Engineering/Data Science/Finance |
-| `customfield_12873` | Epic Horizon | single-select | Q1/Q2/H2 2025, Future, On-Demand |
+| `customfield_11271` | Area | multicheckbox | `Platform`, `DS`, `AE` (Capitalised; sampled, not exhaustive) |
+| `customfield_11274` | Task type | multicheckbox | `new-development, maintenance, tech-debt` seen (lowercase-kebab-case; `ad-hoc`, `onboarding` unverified) |
+| `customfield_11272` | Business unit | multicheckbox | `Sweden, Norway, Denmark, Internal` (sampled) |
+| `customfield_11273` | Epic Horizon | single-select | `Now`, `Next ` (trailing space!) — sampled |
 | `customfield_10021` | Flagged | multi-checkbox | blockers/needs-attention |
 | `customfield_10019` | Rank | system | lexo-rank, never set manually |
 | `customfield_10015` | Start date | date | Epic only |
-| `customfield_10017` | Issue color | string | Epic only |
+| `customfield_10013` | Epic Color | string | Epic only (old `10017` unverified) |
 | `customfield_10000`/`10668`/`10749` | Development/Design/Vulnerability | integration | auto-populated, never set manually |
 
 Fetch valid select values via `get_field_options` first (works for some fields — see below for DATA multicheckbox exceptions).
@@ -66,14 +66,15 @@ Fetch valid select values via `get_field_options` first (works for some fields �
 
 `get_field_options` returns `[]` for these. `get_create_fields` needs `issue_type_id`
 (not `project_key`+`issue_type`) and returns schema without `allowedValues` anyway.
-Enumerate from existing issues instead — single ordering is incomplete, run several:
+Enumerate from existing issues instead — single ordering is incomplete, run several.
+Field IDs changed after Jira migration (Sep 2026) — re-verify with `search_fields` (DATA-scoped = project id 10320):
 
 ```
 jira_search({ jql: 'project=DATA AND "Task type" is not EMPTY ORDER BY created DESC',
-  limit: 20, fields: 'customfield_12671' })
+  limit: 20, fields: 'customfield_11274' })
 ```
 
-Values are lowercase-kebab-case. Treat as sampled, not exhaustive — verify before reuse.
+Task type values are lowercase-kebab-case; Area/Business unit/Epic Horizon are Capitalised. Subtasks usually have none set. Treat as sampled, not exhaustive — verify before reuse.
 
 ## mcpScript result shape
 
@@ -83,5 +84,5 @@ Keep `limit <= 20` — larger results silently omitted by output size guard.
 ```
 create_issue({ project_key: "DATA", issue_type: "Task", summary, description,
   additional_fields: JSON.stringify({ priority: {name:"Medium"}, parent: {key:"DATA-1127"},
-    customfield_12670: [{value:"Platform"}], customfield_12671: [{value:"Feature"}] }) })
+    customfield_11271: [{value:"Platform"}], customfield_11274: [{value:"new-development"}] }) })
 ```

@@ -5,7 +5,7 @@
       "description": "Senior full-stack dev, writes and tests code",
       "model": "vertex-anthropic/claude-sonnet-5-5",
       "thinkingLevel": "medium",
-      "systemPrompt": "You are a senior full-stack developer focused on writing clean, tested code. Prefer small, verifiable changes. Run tests after edits.",
+      "systemPrompt": "Brief. To the point. Be direct. Be efficient.",
       "promptMode": "replace",
       "tools": {
         "allow": [

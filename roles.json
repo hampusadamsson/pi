@@ -2,10 +2,10 @@
   "active": "work",
   "roles": {
     "work": {
-      "description": "Senior full-stack dev, writes and tests code",
+      "description": "Senior dev. Write and test code",
       "model": "vertex-anthropic/claude-sonnet-5-5",
       "thinkingLevel": "medium",
-      "systemPrompt": "Brief. To the point. Be direct. Be efficient.",
+      "systemPrompt": "You are a developer. You are direct, efficient and brief.",
       "promptMode": "replace",
       "tools": {
         "allow": [
@@ -20,21 +20,31 @@
         "deny": []
       },
       "skills": [
-        "ml-model-docs-sync",
-        "obsidian",
-        "sync-vault-context",
-        "confluence",
-        "vault-daily-raw",
-        "github",
-        "jira",
-        "vault-maintenance",
-        "snowflake",
-        "subagents",
-        "humio"
+        "obsidian"
       ]
     },
+    "architect": {
+      "description": "Delegator: plans and reviews, does all work through subagents",
+      "model": "vertex-anthropic/claude-opus-5-5",
+      "thinkingLevel": "medium",
+      "promptMode": "append",
+      "systemPromptFile": "prompts/architect.md",
+      "tools": {
+        "allow": [
+          "hypa_read",
+          "hypa_grep",
+          "hypa_find",
+          "hypa_ls",
+          "subagents"
+        ]
+      },
+      "skills": [
+        "obsidian"
+      ],
+      "hidden": false
+    },
     "researcher": {
-      "description": "Research assistant with access to all skills (Jira, Confluence, GitHub, Obsidian, Snowflake)",
+      "description": "Research assistant with access to all skills (Jira, Confluence, GitHub, Obsidian, Snowflake, Humio)",
       "model": "vertex-anthropic/claude-sonnet-5-5",
       "promptMode": "append",
       "systemPromptFile": "prompts/researcher.md",
@@ -48,7 +58,23 @@
           "hypa_find",
           "hypa_ls",
           "subagents",
-          "mcp*"
+          "codemode",
+          "mcp__atlassian__confluence_add_label",
+          "mcp__atlassian__confluence_get_page",
+          "mcp__atlassian__confluence_create_page",
+          "mcp__atlassian__confluence_move_page",
+          "mcp__atlassian__confluence_search",
+          "mcp__atlassian__confluence_update_page_section",
+          "mcp__atlassian__confluence_get_page_children",
+          "mcp__atlassian__confluence_update_page",
+          "mcp__atlassian__confluence_get_space_page_tree",
+          "mcp__atlassian__jira_search",
+          "mcp__atlassian__jira_create_issue",
+          "mcp__atlassian__jira_get_issue",
+          "mcp__atlassian__jira_update_issue",
+          "mcp__humio__search",
+          "mcp__humio__list_repos",
+          "mcp__snowflake__run_snowflake_query"
         ]
       },
       "skills": [
@@ -58,9 +84,83 @@
         "obsidian",
         "snowflake",
         "vault-daily-raw",
-        "vault-maintenance"
+        "vault-maintenance",
+        "humio",
+        "dml-service-documentation",
+        "ml-model-docs-sync",
+        "sync-vault-context"
       ],
       "hidden": false
+    },
+    "local": {
+      "description": "Basic edit tasks on local model (Mac mini)",
+      "model": "bifrost/qwen/qwen3.5-9b",
+      "promptMode": "replace",
+      "systemPrompt": ".",
+      "tools": {
+        "allow": [
+          "edit",
+          "write",
+          "hypa_read",
+          "hypa_grep",
+          "hypa_shell",
+          "hypa_find",
+          "hypa_ls"
+        ]
+      },
+      "skills": [],
+      "hidden": true
+    },
+    "small": {
+      "description": "Basic simple tasks (Haiku)",
+      "model": "vertex-anthropic/claude-haiku-5-5",
+      "promptMode": "replace",
+      "systemPrompt": ".",
+      "tools": {
+        "allow": [
+          "edit",
+          "write",
+          "hypa_read",
+          "hypa_grep",
+          "hypa_shell",
+          "hypa_find",
+          "hypa_ls"
+        ]
+      },
+      "skills": [],
+      "hidden": true
+    },
+    "retriever": {
+      "description": "Read-only information retrieval (Jira, Confluence, GitHub, Obsidian, Snowflake, Humio) using Haiku",
+      "model": "vertex-anthropic/claude-haiku-5-5",
+      "promptMode": "append",
+      "systemPromptFile": "prompts/retriever.md",
+      "tools": {
+        "allow": [
+          "hypa_read",
+          "hypa_grep",
+          "hypa_find",
+          "hypa_ls",
+          "mcp__atlassian__confluence_get_page",
+          "mcp__atlassian__confluence_search",
+          "mcp__atlassian__confluence_get_page_children",
+          "mcp__atlassian__confluence_get_space_page_tree",
+          "mcp__atlassian__jira_search",
+          "mcp__atlassian__jira_get_issue",
+          "mcp__humio__search",
+          "mcp__humio__list_repos",
+          "mcp__snowflake__run_snowflake_query"
+        ]
+      },
+      "skills": [
+        "jira",
+        "confluence",
+        "github",
+        "obsidian",
+        "snowflake",
+        "humio"
+      ],
+      "hidden": true
     }
   }
 }

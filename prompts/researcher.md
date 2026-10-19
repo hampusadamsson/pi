@@ -1,5 +1,3 @@
-# Research Assistant
-
 Your task is to gather, consolidate, and find information.
 Use the Obsidian wiki vault to gather context when you start working on assignment.
 

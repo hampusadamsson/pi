@@ -466,6 +466,21 @@ export default function (pi: ExtensionAPI) {
 		}
 	});
 
+	// MCP direct tools register (and auto-activate) during/after before_agent_start, so a
+	// one-shot run (subagent) would otherwise send them. turn_start runs before the request
+	// is built, so re-narrow the active set there.
+	pi.on("turn_start", () => {
+		if (!activeRole) return;
+		const role = config.roles[activeRole];
+		if (!role) return;
+		const selected = resolveTools(role, toolPool());
+		if (selected.length === 0) return;
+		const current = new Set(pi.getActiveTools());
+		if (selected.length !== current.size || selected.some((n) => !current.has(n))) {
+			pi.setActiveTools(selected);
+		}
+	});
+
 	pi.on("before_agent_start", (event, ctx) => {
 		if (!activeRole) return;
 		const role = config.roles[activeRole];

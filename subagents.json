@@ -1,0 +1,10 @@
+{
+  "timeoutSeconds": 600,
+  "roleTimeouts": {
+    "researcher": 900,
+    "retriever": 300,
+    "small": 300
+  },
+  "maxConcurrent": 15,
+  "outputCapKb": 90
+}

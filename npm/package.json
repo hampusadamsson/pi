@@ -6,6 +6,6 @@
     "@vanillagreen/pi-session-manager": "^2.0.4",
     "pi-profiles": "^0.1.1",
     "pi-sandbox": "^0.7.1",
-    "pi-zentui": "^0.31.0"
+    "pi-zentui": "^0.31.1"
   }
 }

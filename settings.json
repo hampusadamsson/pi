@@ -12,7 +12,7 @@
     "../../../../opt/homebrew/lib/node_modules/@jmfederico/pi-web/dist/pi-packages/relays"
   ],
   "theme": "my-theme",
-  "hideThinkingBlock": true,
+  "hideThinkingBlock": false,
   "defaultThinkingLevel": "medium",
   "httpIdleTimeoutMs": 900000,
   "enableInstallTelemetry": false,

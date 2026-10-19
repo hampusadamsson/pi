@@ -18,3 +18,4 @@ npm/node_modules
 /trust.json
 /certs/mysharedbrain.pem
 /kendex/pi-session-manager/live
+/bifrost-ca.pem

@@ -47,7 +47,6 @@ COPY themes ./themes
 COPY prompts ./prompts
 COPY mcp.json ./mcp.json
 COPY zentui.json ./zentui.json
-COPY caveman.json ./caveman.json
 COPY sandbox.json ./sandbox.json
 COPY APPEND_SYSTEM.md ./APPEND_SYSTEM.md
 

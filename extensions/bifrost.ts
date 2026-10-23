@@ -22,14 +22,20 @@ import { join, dirname } from "node:path";
 
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
 
-const BIFROST_BASE = "https://bifrost.haadpi.duckdns.org:9443";
-const API_KEY = "sk-bf-1818b6aa-a7fc-4eb5-9804-8650be3b2f7b";
-// Whitelist of local models to expose. Ollama's /v1/models returns all pulled
-// models, not just loaded ones. List only the ones you actually use.
-const LOCAL_MODEL_WHITELIST = [
-	// "qwen/qwen3.5-9b",
-	// "mlx-community/Llama-3.2-3B-Instruct-4bit",
-];
+const BIFROST_BASE = (process.env.BIFROST_BASE ?? "https://bifrost.haadpi.duckdns.org:9443").replace(/\/+$/, "");
+const API_KEY = process.env.BIFROST_API_KEY ?? "sk-bf-1818b6aa-a7fc-4eb5-9804-8650be3b2f7b";
+// Upstream prefixes stripped from ids (bare ids keep existing selections/roles
+// working). Comma-separated; everything else keeps its `provider/` prefix.
+const STRIP_PREFIXES = (process.env.BIFROST_STRIP_PREFIXES ?? "ollama")
+	.split(",")
+	.map((s) => s.trim())
+	.filter(Boolean);
+// Optional comma-separated regexes; only ids matching one are exposed.
+const INCLUDE = (process.env.BIFROST_INCLUDE ?? "")
+	.split(",")
+	.map((s) => s.trim())
+	.filter(Boolean)
+	.map((s) => new RegExp(s));
 // Cache of last successful discovery, written next to this file. Returned
 // instantly at startup so Pi never blocks waiting on the network.
 const CACHE_PATH = join(dirname(new URL(import.meta.url).pathname), "bifrost-models.json");
@@ -48,6 +54,8 @@ interface DiscoveredModel {
 
 // Discovery result caps parsed from provider metadata (all optional).
 interface ModelInfo extends DiscoveredModel {
+	name?: string;
+	cost?: { input: number; output: number; cacheRead: number; cacheWrite: number };
 	contextWindow?: number;
 	maxTokens?: number;
 }
@@ -77,8 +85,20 @@ function parseInfo(raw: unknown, id: string): ModelInfo {
 		num(r.max_tokens) ??
 		num(r.max_completion_tokens) ??
 		num(o.max_output_tokens);
+	// Pricing is USD per token; pi expects USD per million tokens.
+	const p = (r.pricing ?? undefined) as Record<string, unknown> | undefined;
+	const perM = (v: unknown) => (Number.isFinite(Number(v)) ? Number(v) * 1e6 : 0);
 	return {
 		id,
+		name: typeof r.normalized_name === "string" ? r.normalized_name : undefined,
+		cost: p
+			? {
+					input: perM(p.prompt),
+					output: perM(p.completion),
+					cacheRead: perM(p.input_cache_read),
+					cacheWrite: perM(p.input_cache_write),
+				}
+			: undefined,
 		reasoning: guessReasoning(id),
 		contextWindow: ctx2,
 		maxTokens: out,
@@ -92,11 +112,11 @@ function guessReasoning(id: string): boolean {
 function toProviderModel(m: ModelInfo) {
 	return {
 		id: m.id,
-		name: m.id,
+		name: m.name ?? m.id,
 		api: "openai-completions" as const,
 		reasoning: m.reasoning,
 		input: ["text" as const],
-		cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+		cost: m.cost ?? { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
 		contextWindow: m.contextWindow ?? DEFAULT_CONTEXT_WINDOW,
 		maxTokens: m.maxTokens ?? DEFAULT_MAX_TOKENS,
 		compat: {
@@ -137,19 +157,16 @@ async function discover(signal: AbortSignal): Promise<ModelInfo[]> {
 	const body = (await res.json()) as { data?: Record<string, unknown>[] };
 	const raw = body.data ?? [];
 	const entries = raw.map((m, i) => parseInfo(m, (typeof m.id === "string" ? m.id : `model-${i}`)));
-	const ollama = entries.filter((m) => m.id.startsWith("ollama/"));
-	if (ollama.length > 0) {
-		const filtered = LOCAL_MODEL_WHITELIST.length > 0
-			? ollama.filter((m) => LOCAL_MODEL_WHITELIST.includes(m.id.slice("ollama/".length)))
-			: ollama;
-		return filtered.map((m) => ({
-			...m,
-			id: m.id.slice("ollama/".length),
-			reasoning: guessReasoning(m.id.slice("ollama/".length)),
-		}));
-	}
-	// Bifrost not using provider prefixes: bare model ids.
-	return entries;
+	const seen = new Set<string>();
+	return entries
+		.filter((m) => INCLUDE.length === 0 || INCLUDE.some((re) => re.test(m.id)))
+		.map((m) => {
+			const prefix = STRIP_PREFIXES.find((p) => m.id.startsWith(`${p}/`));
+			if (!prefix) return m;
+			const id = m.id.slice(prefix.length + 1);
+			return { ...m, id, reasoning: guessReasoning(id) };
+		})
+		.filter((m) => !seen.has(m.id) && (seen.add(m.id), true));
 }
 
 export default function (pi) {

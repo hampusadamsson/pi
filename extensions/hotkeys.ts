@@ -1156,6 +1156,7 @@ interface Deps {
 	config: HotkeysConfig;
 	buildItems: (kind: ListKind) => SelectItem[];
 	loadSessions: () => Promise<SelectItem[]>;
+	refreshModels: () => Promise<void>;
 	actionByKey: (key: string) => ActionDef | undefined;
 }
 
@@ -1363,6 +1364,23 @@ class HotkeysModal implements Focusable {
 			kind === "models" ? Array.from(new Set(this.allItems.map((item) => item.value.split("/")[0]))).sort() : [];
 		this.list = this.newList(this.allItems);
 		this.applyFilter();
+		if (kind === "models") void this.refreshModelsAsync();
+	}
+
+	private async refreshModelsAsync(): Promise<void> {
+		try {
+			await this.deps.refreshModels();
+		} catch {
+			return;
+		}
+		if (this.view !== "list" || this.kind !== "models") return;
+		const items = this.deps.buildItems("models");
+		if (items.length === this.allItems.length && items.every((it, i) => it.value === this.allItems[i]?.value)) return;
+		this.allItems = items;
+		this.modelProviders = Array.from(new Set(items.map((item) => item.value.split("/")[0]))).sort();
+		this.list = this.newList(items);
+		this.applyFilter();
+		this.tui.requestRender();
 	}
 
 	private async loadSessionsAsync(): Promise<void> {
@@ -1562,6 +1580,9 @@ export default function (pi: ExtensionAPI) {
 		return {
 			config,
 			actionByKey: (key) => config.actions?.[key],
+			refreshModels: async () => {
+				await ctx.modelRegistry.refresh({ allowNetwork: true, force: true, providers: ["bifrost"] });
+			},
 			loadSessions: async () => {
 				const current = ctx.sessionManager.getSessionFile();
 				try {

@@ -24,6 +24,12 @@ process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
 
 const BIFROST_BASE = "https://bifrost.haadpi.duckdns.org:9443";
 const API_KEY = "sk-bf-1818b6aa-a7fc-4eb5-9804-8650be3b2f7b";
+// Whitelist of local models to expose. Ollama's /v1/models returns all pulled
+// models, not just loaded ones. List only the ones you actually use.
+const LOCAL_MODEL_WHITELIST = [
+	// "qwen/qwen3.5-9b",
+	// "mlx-community/Llama-3.2-3B-Instruct-4bit",
+];
 // Cache of last successful discovery, written next to this file. Returned
 // instantly at startup so Pi never blocks waiting on the network.
 const CACHE_PATH = join(dirname(new URL(import.meta.url).pathname), "bifrost-models.json");
@@ -133,7 +139,10 @@ async function discover(signal: AbortSignal): Promise<ModelInfo[]> {
 	const entries = raw.map((m, i) => parseInfo(m, (typeof m.id === "string" ? m.id : `model-${i}`)));
 	const ollama = entries.filter((m) => m.id.startsWith("ollama/"));
 	if (ollama.length > 0) {
-		return ollama.map((m) => ({
+		const filtered = LOCAL_MODEL_WHITELIST.length > 0
+			? ollama.filter((m) => LOCAL_MODEL_WHITELIST.includes(m.id.slice("ollama/".length)))
+			: ollama;
+		return filtered.map((m) => ({
 			...m,
 			id: m.id.slice("ollama/".length),
 			reasoning: guessReasoning(m.id.slice("ollama/".length)),

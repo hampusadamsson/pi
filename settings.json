@@ -9,7 +9,9 @@
     "npm:pi-sandbox",
     "git:github.com/kdejaeger/pi-scoped-models-extra-info",
     "npm:@vanillagreen/pi-session-manager",
-    "../../../../opt/homebrew/lib/node_modules/@jmfederico/pi-web/dist/pi-packages/relays"
+    "../../../../opt/homebrew/lib/node_modules/@jmfederico/pi-web/dist/pi-packages/relays",
+    "npm:pi-web-access",
+    "npm:@juicesharp/rpiv-todo"
   ],
   "theme": "my-theme",
   "hideThinkingBlock": false,

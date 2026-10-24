@@ -35,7 +35,8 @@
           "hypa_grep",
           "hypa_find",
           "hypa_ls",
-          "subagents"
+          "subagents",
+          "todo"
         ]
       },
       "skills": [
@@ -59,6 +60,10 @@
           "hypa_ls",
           "subagents",
           "codemode",
+          "web_search",
+          "source_check",
+          "fetch_content",
+          "get_search_content",
           "mcp__atlassian__confluence_add_label",
           "mcp__atlassian__confluence_get_page",
           "mcp__atlassian__confluence_create_page",

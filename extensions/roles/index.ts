@@ -460,9 +460,11 @@ export default function (pi: ExtensionAPI) {
 			updateStatus(ctx);
 			return;
 		}
-		await applyRole(target, ctx, { quiet: true });
-		if (typeof flagRole === "string" && flagRole.length > 0) {
-			pi.appendEntry(ENTRY_TYPE, { role: target ?? null });
+		// Record the starting role for every path (flag, restored from history, config
+		// default) so other frontends replaying role-switch entries can discover it and
+		// the TUI history shows why the session started with a role.
+		if ((await applyRole(target, ctx, { quiet: true })) && target) {
+			pi.appendEntry(ENTRY_TYPE, { role: target });
 		}
 	});
 

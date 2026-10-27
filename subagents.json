@@ -6,5 +6,6 @@
     "small": 300
   },
   "maxConcurrent": 15,
-  "outputCapKb": 90
+  "outputCapKb": 90,
+  "piBin": "/opt/homebrew/bin/pi"
 }

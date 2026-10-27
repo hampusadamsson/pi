@@ -16,7 +16,8 @@
  *     "timeoutSeconds": 600,           // default run deadline
  *     "roleTimeouts": { "researcher": 900 },
  *     "maxConcurrent": 4,              // extra spawns queue until a slot frees
- *     "outputCapKb": 50                // final output cap returned to the model
+ *     "outputCapKb": 50,               // final output cap returned to the model
+ *     "piBin": "/opt/homebrew/bin/pi" // optional: explicit pi CLI to spawn
  *   }
  *
  * While background runs are active, an "Active subagents" section is appended
@@ -42,6 +43,7 @@ interface SubagentsConfig {
 	roleTimeouts: Record<string, number>;
 	maxConcurrent: number;
 	outputCapKb: number;
+	piBin?: string;
 }
 
 const DEFAULT_CONFIG: SubagentsConfig = {
@@ -61,6 +63,7 @@ function loadConfig(): SubagentsConfig {
 			roleTimeouts: raw.roleTimeouts ?? {},
 			maxConcurrent: raw.maxConcurrent ?? DEFAULT_CONFIG.maxConcurrent,
 			outputCapKb: raw.outputCapKb ?? DEFAULT_CONFIG.outputCapKb,
+			...(typeof raw.piBin === "string" && raw.piBin.trim() ? { piBin: raw.piBin.trim() } : {}),
 		};
 	} catch {
 		return { ...DEFAULT_CONFIG };
@@ -119,6 +122,10 @@ interface Run {
 	model?: string;
 	stopReason?: string;
 	errorMessage?: string;
+	/** Exact `command + args` used to launch the child, for failure messages. */
+	invocation?: string;
+	/** Rolling tail of the child's stderr, so the real reason survives the stack header. */
+	stderrTail: string;
 }
 
 let config = loadConfig();
@@ -163,14 +170,31 @@ function notifyRunEnded(run: Run): void {
 // ---------------------------------------------------------------- child process
 
 function getPiInvocation(args: string[]): { command: string; args: string[] } {
-	const currentScript = process.argv[1];
-	if (currentScript && !currentScript.startsWith("/$bunfs/root/") && existsSync(currentScript)) {
-		return { command: process.execPath, args: [currentScript, ...args] };
+	// 1. Explicit override always wins.
+	const piBin = config.piBin;
+	if (piBin) {
+		if (existsSync(piBin)) return { command: piBin, args };
+		console.warn(`[subagents] configured piBin not found: ${piBin} — falling back to auto-detection`);
 	}
+
+	// 2. Re-exec the pi CLI directly when argv[1] really is the pi CLI. Embedded in
+	//    another host (e.g. uipi's server), argv[1] is the host's entrypoint and
+	//    spawning it with pi's flags dies with ERR_MODULE_NOT_FOUND or starts a
+	//    second server.
+	const currentScript = process.argv[1];
+	const isPiScript = !!currentScript && /pi-coding-agent/.test(currentScript);
+	if (isPiScript && !currentScript!.startsWith("/$bunfs/root/") && existsSync(currentScript!)) {
+		return { command: process.execPath, args: [currentScript!, ...args] };
+	}
+
+	// 3. Only re-exec the current binary if it *is* a JS runtime; otherwise it's an
+	//    app binary that doesn't accept pi's flags.
 	const execName = (process.execPath.split("/").pop() ?? "").toLowerCase();
 	if (!/^(node|bun)(\.exe)?$/.test(execName)) {
 		return { command: process.execPath, args };
 	}
+
+	// 4. Plain node/bun runner: resolve `pi` from PATH.
 	return { command: "pi", args };
 }
 
@@ -200,6 +224,9 @@ function launchRun(run: Run): void {
 	if (roleExcludesMcp(run.role)) args.push("--exclude-tools", "mcp__*");
 	args.push("--", run.task);
 	const invocation = getPiInvocation(args);
+	// Keep the exact launch line so a spawn failure is diagnosable from the tool
+	// result alone ("esm/resolve:241" with no command/cwd cost a long hunt once).
+	run.invocation = [invocation.command, ...invocation.args].join(" ");
 	const proc = spawn(invocation.command, invocation.args, {
 		cwd: run.cwd,
 		shell: false,
@@ -242,13 +269,17 @@ function launchRun(run: Run): void {
 	});
 	proc.stderr!.on("data", (data) => {
 		const text = data.toString();
-		if (!run.errorMessage) run.errorMessage = text.slice(0, 2000);
+		// Keep the newest stderr instead of locking on the first chunk: node prints a
+		// bare `node:internal/modules/esm/resolve:241` header before the actual
+		// `Error [ERR_MODULE_NOT_FOUND]: Cannot find module '...'` reason.
+		run.stderrTail = (run.stderrTail + text).slice(-4000);
+		if (!run.errorMessage) run.errorMessage = run.stderrTail.trim().slice(0, 2000);
 	});
 
 	proc.on("error", (err) => {
 		clearTimeout(run.timeoutHandle);
 		run.state = "failed";
-		run.errorMessage = err.message;
+		run.errorMessage = `spawn failed: ${err.message}`;
 		run.endedAt = Date.now();
 		markFinished(run);
 		notifyRunEnded(run);
@@ -265,6 +296,10 @@ function launchRun(run: Run): void {
 						? "completed"
 						: "failed";
 			run.endedAt = Date.now();
+			// A non-zero exit with no captured stderr still needs a reason attached.
+			if (run.state === "failed" && !run.errorMessage) {
+				run.errorMessage = run.stderrTail.trim() || `exited with code ${code}, no stderr`;
+			}
 		}
 		markFinished(run);
 		notifyRunEnded(run);
@@ -330,7 +365,15 @@ function runSummaryLine(run: Run): string {
 
 function describeRun(run: Run, includeOutput: boolean, tailLines: number): string {
 	const lines = [runSummaryLine(run), `task: ${run.task.slice(0, 200)}`];
-	if (run.errorMessage) lines.push(`error: ${run.errorMessage.split("\n")[0]}`);
+	if (run.errorMessage) {
+		// Show the whole message, not just the first line: node's stack header
+		// (`node:internal/modules/esm/resolve:241`) carries no information, the
+		// reason is on the line below it along with our launch command.
+		const err = run.errorMessage.trim();
+		lines.push(`error:\n${capOutput(err)}`);
+		if (run.invocation) lines.push(`command: ${run.invocation}`);
+		lines.push(`cwd: ${run.cwd}`);
+	}
 	if (includeOutput) {
 		const output = finalOutput(run);
 		if (output) {
@@ -435,6 +478,7 @@ export default function (pi: ExtensionAPI) {
 						timeoutMs,
 						messages: [],
 						usage: { input: 0, output: 0, turns: 0, cost: 0 },
+						stderrTail: "",
 					};
 					runs.set(run.id, run);
 

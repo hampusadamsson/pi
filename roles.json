@@ -3,8 +3,7 @@
   "roles": {
     "work": {
       "description": "Senior dev. Write and test code",
-      "model": "vertex-anthropic/claude-sonnet-5-5",
-      "thinkingLevel": "medium",
+      "model": "bifrost/opencode-go/deepseek-v4.1-flash",
       "systemPrompt": "You are a developer. You are direct, efficient and brief.",
       "promptMode": "replace",
       "tools": {
@@ -25,8 +24,7 @@
     },
     "architect": {
       "description": "Delegator: plans and reviews, does all work through subagents",
-      "model": "vertex-anthropic/claude-opus-5-5",
-      "thinkingLevel": "medium",
+      "model": "bifrost/opencode-go/deepseek-v4.1-flash",
       "promptMode": "append",
       "systemPromptFile": "prompts/architect.md",
       "tools": {
@@ -46,7 +44,7 @@
     },
     "researcher": {
       "description": "Research assistant with access to all skills (Jira, Confluence, GitHub, Obsidian, Snowflake, Humio)",
-      "model": "vertex-anthropic/claude-sonnet-5-5",
+      "model": "bifrost/opencode-go/deepseek-v4.1-flash",
       "promptMode": "append",
       "systemPromptFile": "prompts/researcher.md",
       "tools": {
@@ -101,7 +99,7 @@
       "description": "Basic edit tasks on local model (Mac mini)",
       "model": "bifrost/qwen3.5-9b-mlx",
       "promptMode": "replace",
-      "systemPrompt": ".",
+      "systemPrompt": "You are an agent working on a task.",
       "tools": {
         "allow": [
           "edit",
@@ -133,9 +131,9 @@
     },
     "small": {
       "description": "Basic simple tasks (Haiku)",
-      "model": "vertex-anthropic/claude-haiku-5-5",
+      "model": "bifrost/opencode-go/deepseek-v4.1-flash",
       "promptMode": "replace",
-      "systemPrompt": ".",
+      "systemPrompt": "You are an agent working on a task.",
       "tools": {
         "allow": [
           "edit",
@@ -152,7 +150,7 @@
     },
     "retriever": {
       "description": "Read-only information retrieval (Jira, Confluence, GitHub, Obsidian, Snowflake, Humio) using Haiku",
-      "model": "vertex-anthropic/claude-haiku-5-5",
+      "model": "bifrost/opencode-go/deepseek-v4.1-flash",
       "promptMode": "append",
       "systemPromptFile": "prompts/retriever.md",
       "tools": {

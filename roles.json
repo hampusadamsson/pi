@@ -130,10 +130,10 @@
       "hidden": false
     },
     "small": {
-      "description": "Basic simple tasks (Haiku)",
-      "model": "bifrost/opencode-go/deepseek-v4.1-flash",
+      "description": "Trivial mechanical tasks: small edits, commits, verification runs. Cheapest role.",
+      "model": "bifrost/opencode-go/glm-5.3-flash",
       "promptMode": "replace",
-      "systemPrompt": "You are an agent working on a task.",
+      "systemPrompt": "You are an agent working on a task. Your job is small, precise, mechanical edits and file operations. Follow the instructions exactly. Do not investigate, refactor or make judgement calls; if the task needs engineering judgement, say so instead of guessing.",
       "tools": {
         "allow": [
           "edit",

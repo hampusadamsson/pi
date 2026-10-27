@@ -350,6 +350,20 @@ function fmtTokens(n: number): string {
 	return `${(n / 1000000).toFixed(1)}M`;
 }
 
+/**
+ * A subagent asked for more information rather than guessing. `spawn` is
+ * fire-and-forget, so without an explicit marker a blocked run looks exactly
+ * like a finished one and its guesswork gets accepted as the answer.
+ */
+const CLARIFY_TAG = "NEEDS-CLARIFICATION:";
+
+function clarificationOf(text: string): string | undefined {
+	const at = text.lastIndexOf(CLARIFY_TAG);
+	if (at === -1) return undefined;
+	const question = text.slice(at + CLARIFY_TAG.length).trim();
+	return question || "(no question given)";
+}
+
 function runSummaryLine(run: Run): string {
 	const parts: string[] = [run.id, run.role, run.state];
 	if (isActive(run)) {
@@ -360,11 +374,18 @@ function runSummaryLine(run: Run): string {
 	parts.push(`${run.usage.turns} turns, ↑${fmtTokens(run.usage.input)} ↓${fmtTokens(run.usage.output)}`);
 	if (run.usage.cost > 0) parts.push(`$${run.usage.cost.toFixed(4)}`);
 	if (run.model) parts.push(run.model);
+	if (clarificationOf(finalOutput(run))) parts.push("NEEDS CLARIFICATION");
 	return parts.join(" · ");
 }
 
 function describeRun(run: Run, includeOutput: boolean, tailLines: number): string {
 	const lines = [runSummaryLine(run), `task: ${run.task.slice(0, 200)}`];
+	// Lead with an unanswered question, so a blocked run is never mistaken for a
+	// completed one and its partial/guessed work is not accepted silently.
+	const question = clarificationOf(finalOutput(run));
+	if (question) {
+		lines.push(`needs clarification (the task was NOT completed):\n${capOutput(question)}`);
+	}
 	if (run.errorMessage) {
 		// Show the whole message, not just the first line: node's stack header
 		// (`node:internal/modules/esm/resolve:241`) carries no information, the
@@ -442,6 +463,7 @@ export default function (pi: ExtensionAPI) {
 			"spawn is non-blocking: it returns a run id immediately; the child runs in its own session with the role's model, tools, skills and system prompt.",
 			"Manage runs with status (one run, needs id), list (all runs), wait (block until done), stop (kill).",
 			"Runs have deadlines (per-spawn timeoutSeconds > roleTimeouts > timeoutSeconds); a timed-out run is killed and its partial output returned.",
+			"If a subagent is blocked, tell it to end its reply with `NEEDS-CLARIFICATION: <question>`; such a run is flagged in its result so you do not mistake it for finished work.",
 		].join(" "),
 		promptSnippet: "Background subagent delegation to pi roles from ~/.pi/agent/roles.json (spawn/status/list/wait/stop).",
 		parameters: SubagentToolParams,

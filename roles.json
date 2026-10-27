@@ -149,7 +149,7 @@
       "hidden": true
     },
     "retriever": {
-      "description": "Read-only information retrieval (Jira, Confluence, GitHub, Obsidian, Snowflake, Humio) using Haiku",
+      "description": "Read-only information retrieval (Jira, Confluence, GitHub, Obsidian, Snowflake, Humio) on the cheapest model",
       "model": "bifrost/opencode-go/deepseek-v4.1-flash",
       "promptMode": "append",
       "systemPromptFile": "prompts/retriever.md",

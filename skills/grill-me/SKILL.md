@@ -32,5 +32,5 @@ The session is done when the frontier is empty: every branch of the design tree 
 ## Integrations
 
 - To find facts in the codebase or on GitHub, use the `github` skill (read-only `gh` CLI research) rather than asking the user.
-- At session end, offer to run `sync-vault-context` to capture the resolved decision tree into the Obsidian vault.
-- If any branch can't be resolved by the user alone (someone else holds the knowledge), suggest exporting it via the `to-questionnaire` skill — if installed.
+- At session end, offer to run `sync-vault-context` to capture the resolved decision tree (see `obsidian` skill for vault rules).
+- If a branch can't be resolved by the user alone (someone else holds the knowledge), list it as an open question with who to ask; don't block the rest of the tree.

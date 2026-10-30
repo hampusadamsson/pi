@@ -14,7 +14,7 @@
     "npm:@juicesharp/rpiv-todo"
   ],
   "theme": "my-theme",
-  "hideThinkingBlock": false,
+  "hideThinkingBlock": true,
   "defaultThinkingLevel": "medium",
   "httpIdleTimeoutMs": 900000,
   "enableInstallTelemetry": false,

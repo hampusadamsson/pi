@@ -20,4 +20,5 @@ Tools: `run_snowflake_query`, `list_semantic_views`, `describe_semantic_view`, `
 ## Guardrails
 
 - Confirm context first: `SELECT CURRENT_WAREHOUSE(), CURRENT_DATABASE(), CURRENT_SCHEMA()`.
+- PII: don't select PII columns (names, personal IDs, contact details) unless asked; for deletion/PII questions check the compliance-data-deletion docs first.
 - Cost awareness: large scans / CTAS burn credits — size down first, ask if scale unclear.

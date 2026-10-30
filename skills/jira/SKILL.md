@@ -5,33 +5,54 @@ description: Use Jira via the Atlassian MCP server (search, read, create, update
 
 # Jira (Atlassian MCP)
 
-Tool prefix `atlassian_jira_*`. MCP only, never REST/CLI.
+MCP only, never REST/CLI.
 
-## Workflow
+## Invocation
 
-1. **Dedupe first**: `atlassian_jira_search({ jql, limit, fields })`.
-2. **Read**: `get_issue({ issue_key, fields: "*all", include: "transitions,comments" })`.
-3. **Discover schema before creating**: `get_project_issue_types` (get `issue_type_id`, e.g. Task=12197), `get_create_fields({ issue_type_id })` (schema only, no `allowedValues`), `get_field_options` (returns `[]` for DATA multicheckbox custom fields — unreliable), `search_fields` (fuzzy field-ID lookup).
-4. **Create**: `create_issue` / `batch_create_issues`. Custom fields via `additional_fields` JSON.
-5. **Update**: `update_issue({ issue_key, fields: JSON })`.
-6. **Transition**: check valid transitions (`get_issue` w/ `include: "transitions"` or `get_transitions`) then `transition_issue`.
-7. **Links/hierarchy**: `create_issue_link`, `link_to_epic`, `get_project_epic_hierarchy`, `get_cross_project_dependencies`.
-8. **People**: `search_assignable_users` → accountId for `assignee`.
-9. **Sprints/boards**: `get_agile_boards`, `get_sprints_from_board`, `get_sprint_issues`, `add_issues_to_sprint`, `move_issues_to_backlog`.
-10. **Service desk**: `get_service_desk_for_project`, `get_service_desk_queues`, `get_request_types`, `create_customer_request`.
+- Directly exposed tools (per `mcp.json`): `jira_search`, `jira_get_issue`, `jira_create_issue`, `jira_update_issue` — call as `mcp__atlassian__<tool>`.
+- Every other Jira tool goes through the `mcp` proxy as `atlassian_<tool>`:
 
-## Guardrails
+```
+mcp({ tool: "atlassian_jira_get_project_issue_types", args: { project_key: "DATA" } })
+```
 
-- Never manually set integration/system fields: `Rank`, `Development`, `Design`, `Vulnerability`.
-- Confirm with user before final create/update/transition/delete.
-- `delete_issue`/`move_issue` are destructive — extra confirmation.
+Tool names below are written without prefix. Result text is JSON in `content[0].text`. Keep `limit <= 20` — larger results are silently omitted by the output size guard.
 
-## DATA project (team dml)
+## Generic usage
 
-- Search existing `DATA` tickets before drafting new one; ask one focused question if input unclear.
+1. **Dedupe first**: `jira_search({ jql, limit, fields })`.
+2. **Read**: `jira_get_issue({ issue_key, fields: "*all", include: "transitions,comments" })`.
+3. **Discover schema before creating**: `jira_get_project_issue_types` (get `issue_type_id`), `jira_get_create_fields({ issue_type_id })` (schema only, no `allowedValues`; takes `issue_type_id`, not `project_key`+`issue_type`), `jira_search_fields` (fuzzy field-ID lookup), `jira_get_field_options` (returns `[]` for DATA multicheckbox fields — unreliable).
+4. **Create**: `jira_create_issue` / `jira_batch_create_issues`. Custom fields via `additional_fields` JSON string.
+5. **Update**: `jira_update_issue({ issue_key, fields: JSON })`.
+6. **Transition**: check transitions (`jira_get_issue` w/ `include: "transitions"`) then `jira_transition_issue`.
+7. **Links/hierarchy**: `jira_create_issue_link`, `jira_link_to_epic`, `jira_get_project_epic_hierarchy`.
+8. **People**: `jira_search_assignable_users` → accountId for `assignee`.
+9. **Sprints/boards**: `jira_get_agile_boards`, `jira_get_sprints_from_board`, `jira_get_sprint_issues`, `jira_add_issues_to_sprint`.
+
+### Known failures
+
+- `jira_create_issue` with `customfield_10014` (epic link) fails ("cannot be set. It is not on the appropriate screen, or unknown") — seen 12+ times. No working approach found in sessions: check createmeta (`jira_get_create_fields`) first; for epics try `parent: {key}` in `additional_fields` or `jira_link_to_epic` after creation (untested).
+- Subtasks: `issue_type` must be `"Subtask"` (not `"Sub-task"`) and `parent` goes in `additional_fields`. Verify with createmeta if it still errors.
+
+### Guardrails
+
+- Never set `Rank`, `Development`, `Design`, `Vulnerability` fields.
+- Always confirm with the user before create/update/transition/delete. `jira_delete_issue`/`jira_move_issue` are destructive — extra confirmation.
+
+## Ticket format (user preferences)
+
+- **Background** + **Acceptance criteria**. Criteria are declarative state-after-implementation ("X is Y"), not tasks.
+- When asked for plain text: no markdown/formatting.
+- When asked to "echo the ticket only": output just the ticket, no commentary, and don't create it.
+- Show the draft and get confirmation before writing to Jira.
+
+## DATA project conventions (team dml)
+
+- Search existing `DATA` tickets before drafting; ask one focused question if input unclear.
 - **Title**: imperative verb phrase (`[Verb] [object] [qualifier]`).
 - **Background**: 1 paragraph, 3–5 sentences, prose. Current state → problem/opportunity → why now.
-- **Acceptance criteria**: 1–5 bullets, declarative present tense ("X is Y"), verifiable, MECE.
+- **Acceptance criteria**: 1–5 bullets, declarative present tense, verifiable, MECE.
 
 ```text
 {{IMPERATIVE_TITLE}}
@@ -41,48 +62,41 @@ Tool prefix `atlassian_jira_*`. MCP only, never REST/CLI.
 - {{COMPONENT}} is {{OBSERVABLE_STATE}}
 ```
 
-Project: DATA (DML Data & Machine Learning). Issue types: Task, Epic, Bug, Subtask.
+Project: DATA (DML Data & Machine Learning), project id 10320. Issue types: Task, Epic, Bug, Subtask (Task id seen: 12197).
 Status flow: Backlog → Ready for prio → prioritized → In Progress → Done.
-Board: <https://lendo-group.atlassian.net/jira/software/projects/DATA/boards/347> — links to DML ML Models.
+Board: <https://lendo-group.atlassian.net/jira/software/projects/DATA/boards/347>.
 
-API tokens (create/manage): <https://id.atlassian.com/manage-profile/security/api-tokens>
+### Custom fields
 
-Custom fields (DATA-specific — confirm before reuse elsewhere):
+**UNVERIFIED since Sep 2026 migration — IDs changed in the migration; fetch via `jira_search_fields` / `jira_get_create_fields` before use.** (Not re-verified: no read access available when editing.)
 
 | Field ID | Name | Type | Notes |
-| `customfield_11271` | Area | multicheckbox | `Platform`, `DS`, `AE` (Capitalised; sampled, not exhaustive) |
-| `customfield_11274` | Task type | multicheckbox | `new-development, maintenance, tech-debt` seen (lowercase-kebab-case; `ad-hoc`, `onboarding` unverified) |
+| --- | --- | --- | --- |
+| `customfield_11271` | Area | multicheckbox | `Platform`, `DS`, `AE` (sampled) |
+| `customfield_11274` | Task type | multicheckbox | `new-development`, `maintenance`, `tech-debt` (lowercase-kebab; `ad-hoc`, `onboarding` unverified) |
 | `customfield_11272` | Business unit | multicheckbox | `Sweden, Norway, Denmark, Internal` (sampled) |
 | `customfield_11273` | Epic Horizon | single-select | `Now`, `Next ` (trailing space!) — sampled |
-| `customfield_10021` | Flagged | multi-checkbox | blockers/needs-attention |
-| `customfield_10019` | Rank | system | lexo-rank, never set manually |
+| `customfield_10021` | Flagged | multi-checkbox | blockers |
+| `customfield_10019` | Rank | system | never set |
 | `customfield_10015` | Start date | date | Epic only |
-| `customfield_10013` | Epic Color | string | Epic only (old `10017` unverified) |
-| `customfield_10000`/`10668`/`10749` | Development/Design/Vulnerability | integration | auto-populated, never set manually |
+| `customfield_10013` | Epic Color | string | Epic only |
+| `customfield_10000`/`10668`/`10749` | Development/Design/Vulnerability | integration | never set |
 
-Fetch valid select values via `get_field_options` first (works for some fields — see below for DATA multicheckbox exceptions).
-
-## Custom field values (DATA multicheckbox fields)
-
-`get_field_options` returns `[]` for these. `get_create_fields` needs `issue_type_id`
-(not `project_key`+`issue_type`) and returns schema without `allowedValues` anyway.
-Enumerate from existing issues instead — single ordering is incomplete, run several.
-Field IDs changed after Jira migration (Sep 2026) — re-verify with `search_fields` (DATA-scoped = project id 10320):
+`jira_get_field_options` returns `[]` for the multicheckbox fields. Enumerate values from existing issues (run several orderings; sampled, not exhaustive):
 
 ```
 jira_search({ jql: 'project=DATA AND "Task type" is not EMPTY ORDER BY created DESC',
   limit: 20, fields: 'customfield_11274' })
 ```
 
-Task type values are lowercase-kebab-case; Area/Business unit/Epic Horizon are Capitalised. Subtasks usually have none set. Treat as sampled, not exhaustive — verify before reuse.
+Task type is lowercase-kebab-case; Area/Business unit/Epic Horizon are Capitalised. Subtasks usually have none set.
 
-## mcpScript result shape
-
-Result unwraps as `JSON.parse(r.data.content[0].text)`, not `r.data` directly (FastMCP wrapping).
-Keep `limit <= 20` — larger results silently omitted by output size guard.
+Create example:
 
 ```
-create_issue({ project_key: "DATA", issue_type: "Task", summary, description,
+jira_create_issue({ project_key: "DATA", issue_type: "Task", summary, description,
   additional_fields: JSON.stringify({ priority: {name:"Medium"}, parent: {key:"DATA-1127"},
     customfield_11271: [{value:"Platform"}], customfield_11274: [{value:"new-development"}] }) })
 ```
+
+API tokens: <https://id.atlassian.com/manage-profile/security/api-tokens>

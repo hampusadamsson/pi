@@ -9,22 +9,22 @@ Cross-check model docs (wiki + Confluence) against code (source of truth for beh
 and deployment config (source of truth for infra/env). Propose corrections, don't
 auto-write.
 
-## Sources of truth (priority order)
+## Sources of truth
 
-1. Code: `lendo-data-ml/ml-core` `packages/dml-*` (github skill). Model list = actual
-   model/service packages only — don't hardcode names; exclude shared-lib/infra
-   packages by inspection (e.g. `dml-base`, `dml-dal`, `dml-logger`, `dml-serving`,
+Precedence: see `dml-service-documentation` (code/deployment > Obsidian wiki > Confluence).
+Confluence IDs/gotchas: `confluence` skill. Hosts/orgs/repos: `github` skill.
+
+1. Code: `lendo-data-ml/ml-core` `packages/dml-*`. Model list = actual model/service
+   packages only — don't hardcode names; exclude shared-lib/infra packages by
+   inspection (e.g. `dml-base`, `dml-dal`, `dml-logger`, `dml-serving`,
    `dml-http-client`, `dml-graphql-client`, `dml-cli`, `dml-ci`, `dml-service-adapters`,
    `dml-model-registry-v1`, `dml-mlflow` — these support models, aren't models).
-2. Deployment: `lendo-data-ml/argocd-config` (github skill). Outliers: some models
-   deploy via `lendo-se/argocd-config` or `lendo-sre/argocd-config-lendo-norway` — check
-   both if a model isn't found in lendo-data-ml, or if it's NO/SE market-specific and
-   docs mention a separate adapter/cluster. Also check adapter repos (e.g.
-   `lendo-se/prediction-model-adapters`) when docs reference a fronting adapter.
-3. Confluence ML space (secondary doc, may lag):
-   <https://lendo-group.atlassian.net/wiki/spaces/LDML/folder/2475622432/ML+models>
-   (e.g. dml-refinance-se: <https://lendo-group.atlassian.net/wiki/spaces/LDML/pages/93095526/dml-refinance-se>)
-4. Obsidian wiki (secondary doc, may lag): `1-wiki/` vault, `services/` map (owner: dml)
+2. Deployment: `lendo-data-ml/argocd-config`. Outliers: `lendo-se/argocd-config`,
+   `lendo-sre/argocd-config-lendo-norway` — check if a model isn't in lendo-data-ml or
+   is NO/SE-specific. Also check adapter repos (e.g. `lendo-se/prediction-model-adapters`)
+   when docs reference a fronting adapter.
+3. Obsidian wiki (may lag): `1-wiki/services/` (owner: dml).
+4. Confluence ML models folder (published mirror, may lag): see `confluence` skill.
 
 ## Workflow (per model)
 
@@ -33,10 +33,9 @@ auto-write.
    model/service — check for `serve.py`/API entrypoint or a training/scoring job).
 2. **Wiki context**: obsidian skill — find model's page under `1-wiki/services/`
    (grep by package/model name). Read `resource:`, owner, description, links.
-3. **Confluence context**: confluence skill — list all children of the ML models
-   folder (`atlassian_confluence_search` with `query: 'ancestor=2475622432'`, since
-   `get_page_children` 404s on this folder), then match the model's page by title.
-   Read full page (`get_page` with `page_id`, `convert_to_markdown: true`).
+3. **Confluence context**: `confluence` skill — list the ML models folder's pages
+   (see skill for the `get_page_children` workaround), match the model's page by title,
+   read the full page.
 4. **Code check**: github skill, ml-core — confirm package exists, read README +
    actual source tree (routers, entrypoints, referenced modules like `train.py`).
    Verify docs' claims (e.g. "no retraining") against what's actually in the tree.
@@ -53,8 +52,7 @@ auto-write.
    but missing from wiki and/or Confluence entirely.
 8. **Propose**: short recommendation per model — what to change in wiki, what to
    change in Confluence, cite source (code path / argocd path) backing the correction.
-   No edits without explicit confirm (both obsidian and confluence skills are
-   read-then-confirm). If a discrepancy implies a real infra bug (e.g. broken cronjob),
+   No edits without explicit confirm (approval gate: `obsidian` skill). If a discrepancy implies a real infra bug (e.g. broken cronjob),
    flag it as an infra issue for the team, not just a doc fix.
 
 ## Output format (per model)

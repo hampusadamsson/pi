@@ -6,10 +6,10 @@ Source: vault `template/` directory. Use these to create new pages after user ap
 
 ```markdown
 ---
-type: note
+type: reference
 title: ""
 description: ""              # one line, LLM-searchable summary
-tags: [type/note, status/seedling]
+tags: [type/reference, status/seedling]
 timestamp: {{date}}
 resource: []                # source-of-truth the agent re-reads to refresh this page (repo, Confluence, table, daily note). NOT operational links — those go in # Links
 ---
@@ -59,7 +59,7 @@ example --run
 type: tool
 title: ""
 description: ""              # one line, LLM-searchable summary
-tags: [type/tool, tool/managed, system/, status/evergreen]
+tags: [type/tool, tool/managed, system/, status/active]
 timestamp: {{date}}
 resource: []                # source-of-truth the agent re-reads to refresh this page (vendor docs, repo, Confluence). NOT operational links — those go in # Links
 ---
@@ -151,6 +151,12 @@ Known issues + runbooks. Symptom → cause → fix.
 - Depends: [[snowflake]] [[rabbitmq]]
 - Surfaces: [[inbox-se]] [[admin-se]]   (where it renders, if applicable)
 
+# Changelog
+
+Dated entries, newest first. Format: `- YYYY-MM-DD — what changed — source`
+
+- YYYY-MM-DD — what changed — source (PR / Confluence / daily note)
+
 # See also
 
 [[related-page]]
@@ -178,8 +184,7 @@ tags: [type/daily, status/raw]
 
 ```markdown
 ---
-tags:
-  - type/meeting
+tags: [type/daily, status/raw]
 attendees:
 date: "{{date}}"
 ---

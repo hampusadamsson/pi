@@ -8,14 +8,12 @@ disable-model-invocation: true
 
 Deep maintenance of `1-wiki/`. Run only when the user explicitly asks. Never on your own initiative.
 
-Vault root: `/Users/hampus.adamsson/syncthing/default/obsidian/work/`
+Vault root, OKF, approval gate and proposal format: `/skill:obsidian` (single source).
 
 ## Safety gates
 
-- Read/scan/search/list: always allowed.
-- Writes: only for items the user explicitly selected. Never apply the whole plan automatically.
-- `0-daily/` and `3-journal/`: read-only, always.
-- Report before writing. No edits during the scan phase.
+- Follow the obsidian skill's write approval gate; never apply the whole plan automatically. No edits during scan.
+- `0-daily/` and `3-journal/`: read-only.
 
 ## Workflow
 
@@ -43,25 +41,23 @@ Index every page in `1-wiki/` plus its `index.md` MOCs. Build the entity list: o
 - Format drift: title headings in body, bold/italic instead of headings, missing `# See also`.
 - Stale `status/` values, missing `owner:` on service pages.
 
-### 5. Summary — numbered, prioritized
+### 5. Proposals — prioritized
 
-Report as numbered bullets, split by priority:
+Use the obsidian proposal format, ids prefixed by priority:
 
 - **A. High** — conflicts, duplicates, wrong/stale facts, broken links, dead resources.
 - **B. Medium** — stale content, missing cross-links, MOC gaps.
 - **C. Low** — formatting, tag cleanup, missing `# See also`.
 
-Each bullet: `A1` etc. — page, problem, proposed fix. User replies with letters, numbers, or ranges (e.g. `A1 A3`, `B2-4`, `C`). Apply only the selected items.
+Each item: `A1` etc. — action, target note, one-line reason (+ proposed fix). User replies with letters, numbers, or ranges (e.g. `A1 A3`, `B2-4`, `C`). Apply only the selected items.
 
 ### 6. Apply (selected only)
 
-1. Update content per selection.
-2. Bump metadata: set `timestamp: YYYY-MM-DD` (today's date) in frontmatter on every changed page. One timestamp field only — no second date field.
-3. If merged/renamed: update the map `index.md` and cross-links.
-4. Report what changed and what was left.
+1. Update content per selection; timestamp, `index.md` and cross-links per the obsidian gate.
+2. Report what changed and what was left.
 
 ## Reference
 
-- Vault architecture, OKF, tag vocab: `/Users/hampus.adamsson/.pi/agent/skills/obsidian/references/vault-spec.md`
+- `/skill:obsidian` — gate, proposal format, MCP tools
+- Vault spec/tag vocab: `/Users/hampus.adamsson/.pi/agent/skills/obsidian/references/vault-spec.md`
 - Templates: `/Users/hampus.adamsson/.pi/agent/skills/obsidian/references/templates.md`
-- Companion skill: `/skill:obsidian`

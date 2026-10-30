@@ -1,6 +1,6 @@
 # Vault Specification
 
-Vault root: `/Users/hampus.adamsson/syncthing/default/obsidian/work/`
+Vault root: see `obsidian/SKILL.md`.
 
 Top level. Each map has an `index.md` (MOC) — keep current on add/rename. Max depth 2 under a realm.
 
@@ -68,7 +68,7 @@ Sections: Summary · Install · Auth · How-to · Links · Incidents · Depends 
 
 Sections: Summary · Lives&Runs · Auth · How-to · Links · Incidents · Depends/Surfaces · See also.
 
-- `owner` in frontmatter. Models add `type/model` + `ML####` id.
+- `owner` in frontmatter. Models use `type/model` (instead of `type/service`) + `ML####` id. Template: `templates.md` (service, incl. `## Changelog`).
 
 ### General rules
 
@@ -81,10 +81,10 @@ Canonical wiki reference: `[[wiki]]`. Base every wiki page on it; `tool.md` and 
 
 ```markdown
 ---
-type: note
+type: reference            # matches primary type/ tag
 title: "Human-readable title"
 description: "Short, LLM-searchable summary"
-tags: [type/note, status/seedling]
+tags: [type/reference, status/seedling]
 timestamp: {{date}}
 resource: []   # authoritative source(s) the agent re-reads to update this page
 owner: ""      # services only: dml | lendo-se | lendo-no | lendo-pfm (Kreddy)
@@ -117,7 +117,7 @@ No title heading in the body — the filename is the title.
 - **Progressive disclosure:** overview first, detail below. One subject per page; never skip heading levels.
 - **Scannable:** prefer tables/lists over prose. Fence code with a language and a labelling comment.
 - **No orphans:** every page is linked from its map `index.md` and ends with `# See also`.
-- **Evergreen:** update in place; bump `timestamp` = last reviewed. State (status, owner) lives in frontmatter, not in the body.
+- **Living pages:** update in place; bump `timestamp` = last reviewed. State (status, owner) lives in frontmatter, not in the body.
 - **KISS:** Simple. Flat where possible. Never overcomplicate.
 - **Short & technical:** Fewest words. No adjectives. One subject per note.
 - **Tag:** vocabulary below only. No new tag without approval.
@@ -134,9 +134,9 @@ Use these only. Request approval before adding a new tag. Folders carry domain; 
 
 ### status/
 
-`status/raw`, `status/seedling`, `status/active`, `status/idea`, `status/deprecated`
+`status/raw`, `status/seedling`, `status/active`, `status/idea`
 
-`status/raw` = not yet processed by the agent. `status/deprecated` = legacy (e.g. travis, spinnaker).
+`status/raw` = not yet processed by the agent. No `deprecated` status: retired/legacy entities (e.g. travis, spinnaker) move to `2-archive/`; `1-wiki/` is active-only. No `evergreen` or `note` tags/types.
 
 ### market/ (market / business unit)
 

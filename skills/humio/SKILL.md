@@ -5,7 +5,21 @@ description: Query Humio (CrowdStrike LogScale) via the humio MCP server for DML
 
 # Humio (LogScale MCP)
 
-Tools: `humio_search`, `humio_list_repos`, `humio_get_config`. Server `humio`, config via `HUMIO_TOKEN`/`HUMIO_ENDPOINT`/`HUMIO_REPO` env vars.
+Tools (as seen in sessions): `mcp__humio__search` and `mcp__humio__list_repos` are exposed directly (args: `query`, `repo`, `start`, `end`, `limit`). Others (`humio_get_config`) go via the proxy: `mcp({ tool: "humio_get_config", args: {} })`. Config via `HUMIO_TOKEN`/`HUMIO_ENDPOINT` env vars.
+
+Example:
+
+```
+mcp__humio__search({ repo: "dml_lendo_prod", query: "kubernetes.labels.app=pcm-se log_processed.levelname=ERROR | groupBy(log_processed.message)", start: "7d", limit: 25 })
+```
+
+## Repo/env selection
+
+- Defaults: DML model / Airflow → `dml_lendo_prod` (stage: `dml_lendo_stage`; the `lendo_dml_*` naming is the same set — use the table below). SE app → `se_lendo_month`. Kreddy → `kreddy_lendo_month`; NO → `no_lendo_pro`.
+- Don't re-ask which repo if the default fits; run `list_repos` only if unsure.
+- Before concluding, always state to the user the repo + env + time window used.
+- Day-bucketed counts: `timechart(span=1d)` or `bucket(span=1d)` + `groupBy`.
+- On timeout: retry with a narrower window and/or smaller `limit`.
 
 ## Repos → environment
 
@@ -25,7 +39,7 @@ Always `humio_list_repos` first if unsure — repo set can change.
 
 ## Query syntax — tested gotchas
 
-- **Field filters unquoted**: `kubernetes.labels.app=pcm-se` — not `"kubernetes.labels.app" = "pcm-se"` (quoting the name makes it a text search, not a field match).
+- **Field filters: write names unquoted** (`kubernetes.labels.app=pcm-se`) — a quoted string on its own is free-text search. Exception: the Airflow examples below use the quoted form `"log_processed.name" = value` and were verified live; if a quoted filter returns 0 rows unexpectedly, retry unquoted (and vice versa).
 - **Free-text + field filter = space (implicit AND), never a pipe.** `"error" | kubernetes.labels.app=airflow` splits into two pipeline stages and returns 0 rows. Correct: `kubernetes.labels.app=airflow ERROR`.
 - **"N event(s) matched" is the pre-pipeline scan count**, not the row count after `groupBy`/`timechart`. Verify real counts with `groupBy(field, function=count())`.
 - Prefer **one broad query** (wide time window, filters/pipes in the query string) over many narrow calls — each call re-scans server-side.
@@ -44,7 +58,7 @@ kubernetes.labels.app=pcm-se log_processed.levelname=ERROR
 | groupBy(log_processed.message)
 ```
 
-Tested live (`dml_lendo_prod`, `pcm-se`, 30d): 0 matches — confirms the pattern runs clean even with no errors present. Swap `pcm-se` for any workload from the table below.
+Tested live (undated; `dml_lendo_prod`, `pcm-se`, 30d): 0 matches — confirms the pattern runs clean even with no errors present. Swap `pcm-se` for any workload from the table below.
 
 For Airflow (container logs, no `log_processed.levelname` field) — free-text ERROR + groupBy on the raw message:
 
@@ -53,42 +67,20 @@ kubernetes.labels.app=airflow ERROR
 | groupBy("log_processed.message")
 ```
 
-Tested live (`dml_lendo_prod`, 7d): 28 matching events, 15 distinct grouped messages — real errors surfaced included zombie task detection, scheduler exceptions, otel-collector connection timeouts, and specific DAG run failures (`Marking run <DagRun ...> failed`).
+Tested live (undated; `dml_lendo_prod`, 7d): 28 matching events, 15 distinct grouped messages — real errors surfaced included zombie task detection, scheduler exceptions, otel-collector connection timeouts, and specific DAG run failures (`Marking run <DagRun ...> failed`).
 
 General template: `kubernetes.labels.app=<workload> [level filter or free-text ERROR] | groupBy(<message field>)`. Always run `head(3)` on the workload first if unsure whether it's a `log_processed.*`-parsed service or raw container logs.
 
-## Workloads in `dml_lendo_prod` worth tracking
+## Workloads
 
-Sampled live via `* | groupBy(kubernetes.labels.app, function=count()) | sort(_count, order=desc)` (1h window) — re-run to get current set, this list drifts as services deploy/retire.
-
-**Airflow data pipeline (DP):**
-
-- `airflow` — scheduler + webserver pod (health checks, task/DAG lifecycle logs)
-- `airflow-worker` — Celery task execution
-- `cloudsql-proxy-airflow` — DB proxy sidecar, high volume, usually not the debugging target
-
-**ML models / prediction services (per-market):**
-
-- `pcm-se`, `pcm-dk-v1-predictor`, `pcm-dk-v1-middleware`, `pcm-no-v1` — partner/customer-matching models
-- `ctm-se-v1` — SE model
-- `refinance-se-v1`, `refinance-se-v2`
-- `soc-se-v2`, `soc-no-v1`
-- `irm-se-v1`, `irm-no-v3`
-- `mlac-no-v2`
-- `insurance-se-middleware`, `insurance-se-v1-predictor`
-- `autorevision-se-v1`
-- `cloudsql-proxy-model-registry-prod`, `mlflow-service` — model registry infra
-
-**Other infra worth knowing (usually not error-investigation targets):** `snowflake-conversational-analytics-mcp`, `redis`, `cainjector`, `otel-collector-service`, `managed-prometheus-rule-evaluator`/`-collector`, `openwebui`, `webhook`, `compliance-deletion`.
-
-To refresh this list for another repo/env:
+Full, maintained workload list: see the `humio` wiki page (`1-wiki/work/tools/humio.md`; access via `obsidian` skill). It drifts as services deploy/retire — don't trust a static list. Airflow apps: `airflow`, `airflow-worker`. Discover the current set live:
 
 ```
-mcp({ server: "humio", tool: "humio_search", args: {
-  repo: "se_lendo_month",
+mcp__humio__search({
+  repo: "dml_lendo_prod",
   query: "* | groupBy(kubernetes.labels.app, function=count()) | sort(_count, order=desc)",
   start: "1h", limit: 50
-}})
+})
 ```
 
 ## Airflow pipeline examples (see also [[airflow]] / [[humio]] wiki pages)
@@ -111,14 +103,13 @@ mcp({ server: "humio", tool: "humio_search", args: {
 | sort("Total Failures", order=desc)
 ```
 
-Both verified against `dml_lendo_prod`. Don't hardcode specific `dag_id` values into reusable queries — discover current ones live via `groupBy(dag_id, function=count())` first, they change over time.
+Both verified against `dml_lendo_prod` (undated). Don't hardcode specific `dag_id` values into reusable queries — discover current ones live via `groupBy(dag_id, function=count())` first, they change over time.
 
-## Repo/tool discovery pattern
+## Discovery
 
 ```
-mcp({ server: "humio", tool: "humio_list_repos", args: {} })
-mcp({ server: "humio", tool: "humio_get_config", args: {} })
-mcp({ server: "humio", tool: "humio_search", args: { repo, query, start, end, limit, fields, extract, dedupe } })
+mcp__humio__list_repos({})
+mcp({ tool: "humio_get_config", args: {} })
 ```
 
 ## Source

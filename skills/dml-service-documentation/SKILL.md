@@ -12,7 +12,9 @@ This skill ensures service documentation is kept in sync.
 
 ## Precedence (when sources conflict)
 
-code > deployment config > wiki > Confluence.
+code/deployment config (source of truth) > Obsidian wiki > Confluence (published mirror of the wiki).
+
+This is the single precedence rule; `ml-model-docs-sync` follows it. Wiki and Confluence are both "may lag" docs: when they differ, the wiki wins unless code/deployment says otherwise.
 
 Prose-only content (ownership, intent, SLAs, runbooks, context) cannot be verified by code. Do not delete or rewrite it because the code is silent. Flag it as "unverifiable" instead.
 
@@ -24,10 +26,10 @@ Prose-only content (ownership, intent, SLAs, runbooks, context) cannot be verifi
 
 ## Step 1: Retrieve data
 
-1. Wiki docs for {service}: check `1-wiki/services/` in the vault first (use wiki/obsidian/vault skill).
-2. Confluence docs for {service}: list pages under `spaces/LDML/folder/93094127` in Confluence and find the {service} page (use Confluence/Atlassian skill).
-3. Code for {service}: use gh skill, default branch unless the deployment config shows another. Consult the wiki if the repo is uncertain.
-4. Deployment config for {service}: use gh skill. Consult the wiki if the repo is uncertain.
+1. Wiki docs for {service}: check `1-wiki/services/` in the vault first (`obsidian` skill; vault path and write gate are defined there).
+2. Confluence docs for {service}: list pages under `spaces/LDML/folder/93094127` in Confluence and find the {service} page (`confluence` skill; IDs and API gotchas there).
+3. Code for {service}: use `github` skill (set `GH_HOST=lendo-group.ghe.com`), default branch unless the deployment config shows another. Consult the wiki if the repo is uncertain.
+4. Deployment config for {service}: use `github` skill. Consult the wiki if the repo is uncertain.
 
 5. Follow links and uses:
    - Follow links in wiki and Confluence docs (wikilinks, linked Confluence pages, repo, dashboard, runbook, and ADR links). Read linked docs that describe {service}. Flag broken, stale, or missing links.
@@ -42,8 +44,8 @@ Expect the docs to exist. If a doc is missing, say so in the report. Do not crea
 1. Compare wiki against Confluence. Identify discrepancies and missing information.
 2. Compare both against code and deployment config, using the precedence above.
 3. Verify links and dependency/consumer lists from Step 1.5 against code and deployment config. Fix them in the docs by the same precedence.
-4. For un-synced state: prepare changes to wiki and Confluence based on the precedence. Wiki and Confluence need not be identical, but must be in sync (factually consistent).
-5. Ensure both docs follow the template (`/template/service` in the wiki). Deviate only when necessary, and note why.
+4. For un-synced state: prepare changes to wiki and Confluence based on the precedence. Every factual claim (API, infra, dependencies, links, changelog entries) must match in both docs. Wording, ordering, and formatting may differ. If the two disagree, resolve by the precedence above and edit the lower-precedence doc.
+5. Ensure both docs follow the template (`obsidian` skill → `references/templates.md`, service template). Deviate only when necessary, and note why.
 
 ## Step 3: Consider latest changes
 
@@ -52,9 +54,11 @@ Expect the docs to exist. If a doc is missing, say so in the report. Do not crea
 3. Changelog is stricter. Keep it sparse. Add only business-impacting, larger changes (for example new/removed capability, breaking API change, major infra or dependency migration, notable behavior change for users or consumers). Skip bot bumps, refactors, retraining/routine model refreshes, minor fixes, config/env/param changes, and anything with no business impact. When unsure, leave it out.
 4. Group changelog entries by date: one row/heading per date, with brief bullets for that date's changes. Do not add many rows per date or one row per commit/PR. Use merge/PR date, or the release date if one exists.
 5. Read the existing changelog in each doc before adding. If an item is already present, take no action. Otherwise add to the existing date's entry, or create a new date entry if none exists.
-6. Changelog section is defined in the template. Each doc (wiki and Confluence) has its own, and both must be updated.
+6. The Changelog section format is defined in `obsidian` skill → `references/templates.md` (service template, `## Changelog`). Each doc (wiki and Confluence) has its own, and both must be updated.
 
 ## Step 4: Report, approve, edit
+
+Approval gate: follow the propose-then-wait-for-yes rule in the `obsidian` skill (applies to Confluence too).
 
 1. Present a summary of the proposed edits per doc (wiki, Confluence). Include discrepancies found, broken or missing links, dependency/consumer gaps, unverifiable prose, and the changelog entries (grouped by date, business-impacting only).
 2. End the proposal with an explicit confirmation question, for example: "Apply these edits to wiki and Confluence? (yes / no / changes)". Then stop and wait for the answer.

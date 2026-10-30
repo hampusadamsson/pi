@@ -361,7 +361,7 @@ const SubagentToolParams = Type.Object({
 		description:
 			"spawn: start a background run (needs role + task); status: inspect one run (needs id); list: all runs; wait: block until a run finishes; stop: kill a run (needs id)",
 	}),
-	role: Type.Optional(Type.String({ description: "spawn: role name from roles.json" })),
+	role: Type.Optional(Type.String({ description: "spawn: role name defined in ~/.pi/agent/roles.json (or ~/.pi/agent/roles/<name>.json)" })),
 	task: Type.Optional(Type.String({ description: "spawn: task prompt for the subagent" })),
 	cwd: Type.Optional(Type.String({ description: "spawn: working directory (default: session cwd)" })),
 	id: Type.Optional(Type.String({ description: "status/wait/stop: run id" })),
@@ -395,12 +395,12 @@ export default function (pi: ExtensionAPI) {
 		name: "subagents",
 		label: "Subagent",
 		description: [
-			"Delegate a task to a background subagent running as a pi role (roles.json).",
+			"Delegate a task to a background subagent running as a pi role (defined in ~/.pi/agent/roles.json or ~/.pi/agent/roles/<name>.json).",
 			"spawn is non-blocking: it returns a run id immediately; the child runs in its own session with the role's model, tools, skills and system prompt.",
 			"Manage runs with status (one run, needs id), list (all runs), wait (block until done), stop (kill).",
 			"Runs have deadlines (per-spawn timeoutSeconds > roleTimeouts > timeoutSeconds); a timed-out run is killed and its partial output returned.",
 		].join(" "),
-		promptSnippet: "Background subagent delegation to pi roles (spawn/status/list/wait/stop).",
+		promptSnippet: "Background subagent delegation to pi roles from ~/.pi/agent/roles.json (spawn/status/list/wait/stop).",
 		parameters: SubagentToolParams,
 
 		async execute(_toolCallId, params, _signal, _onUpdate, ctx) {

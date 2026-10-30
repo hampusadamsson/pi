@@ -7,15 +7,14 @@ description: Reconcile the current conversation context (what was just discussed
 
 Takes the current session's context — facts learned, decisions made, problems fixed, commands run, entities touched — and checks it against the vault's canonical pages. Surfaces discrepancies as a numbered list of proposed actions; the user picks which to run.
 
-Vault root: `/Users/hampus.adamsson/syncthing/default/obsidian/work/`
+Vault root, OKF, MCP tool list, approval gate and proposal format: `/skill:obsidian` (single source).
 
 ## Safety gates
 
-- Read/scan/search (`read_note`, `read_notes`, `read_vault_index`, `list_directory`, `search_notes`, `search_by_tag`, `get_frontmatter`, `get_backlinks`, `get_outgoing`, `recent_changes`, `note_history`): always allowed.
-- Writes (`create_note`, `update_note`, `append_note`, `patch_note`, `move_note`, `set_frontmatter`, `delete_note`): only for items the user explicitly selected. Never batch-apply.
-- `give_feedback` and `ask_question`: no approval needed to file — they queue for review / log a question, they don't write the vault. Still list them as proposed actions so the user sees what will be filed.
-- `0-daily/` and `3-journal/`: read-only, always.
-- Never invent facts to fill a gap — if context is ambiguous, ask instead of guessing which page/action.
+- Follow the obsidian skill's write approval gate; never batch-apply.
+- `give_feedback`/`ask_question` need no approval (queued, not vault writes) but are still listed as proposals.
+- `0-daily/` and `3-journal/`: read-only.
+- Never invent facts — if context is ambiguous, ask.
 
 ## Workflow
 
@@ -39,7 +38,7 @@ Compare session context against each found page's content, frontmatter (`resourc
 
 ### 4. Propose actions
 
-One numbered item per discrepancy, each with a concrete action type:
+One item per discrepancy, in the obsidian proposal format. Action types:
 
 - `edit` — `patch_note`/`append_note` (small) or `update_note` (rewrite), with the exact proposed text.
 - `create` — new page: proposed id, OKF frontmatter, and content.
@@ -48,7 +47,7 @@ One numbered item per discrepancy, each with a concrete action type:
 - `frontmatter` — `set_frontmatter` for `resource`/`owner`/`tags`/`timestamp` fixes alone.
 - `skip` — noted but no action needed (e.g. already consistent).
 
-Format:
+Example:
 
 ```
 1. [edit] 1-wiki/work/tools/foo — session found `foo` now supports X; page says it doesn't. Proposed: patch "# Summary" to add X.
@@ -66,12 +65,12 @@ User replies with numbers/ranges (e.g. `1 3`, `2-4`, `all`, `none`). Only apply 
 ### 6. Apply selected
 
 1. Run the corresponding MCP tool per selection.
-2. `set_frontmatter` `timestamp: YYYY-MM-DD` (today) on every page actually edited — one timestamp field.
-3. New/renamed pages: update the map `index.md` (`patch_note`) and add `[[cross-links]]`.
-4. Report what was applied, what was skipped, and what's still open (questions filed, feedback queued).
+2. Set `timestamp` (`set_frontmatter`), map `index.md` (`patch_note`) and cross-links per the obsidian gate.
+3. Report what was applied, what was skipped, and what's still open (questions filed, feedback queued).
 
 ## Reference
 
-- Vault architecture, OKF, tag vocab: `/Users/hampus.adamsson/.pi/agent/skills/obsidian/references/vault-spec.md`
+- `/skill:obsidian` — gate, proposal format, MCP tools
+- Vault spec/tag vocab: `/Users/hampus.adamsson/.pi/agent/skills/obsidian/references/vault-spec.md`
 - Templates: `/Users/hampus.adamsson/.pi/agent/skills/obsidian/references/templates.md`
-- Companion skills: `/skill:obsidian`, `/skill:vault-maintenance`
+- Related: `/skill:vault-maintenance`

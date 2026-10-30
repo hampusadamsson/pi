@@ -5,6 +5,8 @@ description: Read-only GitHub/GitHub Enterprise research using the `gh` CLI (Git
 
 # GitHub research via `gh` CLI
 
+> **ALWAYS `export GH_HOST=lendo-group.ghe.com` before any `gh` command.** `github.schibsted.io` is legacy/archived and wrong for current repos. `.ghe.io` is a typo — the host is `.ghe.com`.
+
 Read-only exploration of repos, PRs, issues, CI, history — no full clone unless needed.
 
 ## Commands
@@ -50,16 +52,17 @@ gh api orgs/<org>/teams/<slug>/members --jq '.[].login'
 
 ## Org structure (Lendo)
 
-Host: `lendo-group.ghe.com` (Okta-gated). Legacy: `github.schibsted.io` (archived, mostly gone).
+Host: `lendo-group.ghe.com` (Okta-gated). Legacy `github.schibsted.io` is archived — don't use.
 
 - `lendo-data-ml` — DML repos (models, services, IaC, CI).
 - `lendo-shared` — cross-team shared IaC/tooling.
 - `lendo-se` / `lendo-sre` / `lendo-pfm` — SE market / SRE infra / Kreddy-PFM repos.
 - `hampus-adamsson` — personal, not org-owned.
 
-## Repo inventory (non-exhaustive, confirm via `gh repo list <org>`)
+## Repo inventory (non-exhaustive, confirm via `gh repo list <org>`). Last verified: 2026-08 (see Resolved note below).
 
 | Repo | Org | What |
+|---|---|---|
 | `ml-core` | `lendo-data-ml` | Monorepo, DML model packages (`packages/dml-*`: irm/ctm/pcm/soc/dta/mlac-se/no, enhanced-conversion, martech-monitoring, compliance-dml, dal, mlflow, filter-evaluation) + scripts + shared CI |
 | `predictions-api` | `lendo-data-ml` | AMQP + business filters + prediction endpoints, NO/SE |
 | `argocd-config` | `lendo-data-ml` | Canonical DML GitOps (Helm + per-env ArgoCD), branch `master` |

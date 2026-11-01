@@ -1,3 +1,4 @@
 {
-  "workflow": "none"
+  "workflow": "none",
+  "fetchRouting": { "allowRemoteHostedProviders": true }
 }

@@ -8,6 +8,7 @@
     "pi-profiles": "^0.1.1",
     "pi-sandbox": "^0.7.2",
     "pi-web-access": "^0.45.0",
+    "pi-web-access": "^0.44.0",
     "pi-zentui": "^0.32.0"
   }
 }

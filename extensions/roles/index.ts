@@ -481,6 +481,29 @@ export default function (pi: ExtensionAPI) {
 		}
 	});
 
+	// MCP tools register (and auto-activate) after before_agent_start, so the run's tool
+	// snapshot can already be wider than the role's set; turn_start narrows getActiveTools()
+	// but the request declarations were snapshotted. context_with_system sees the full
+	// transcript and its result is sent as returned, so strip foreign declarations here.
+	pi.on("context_with_system", (event) => {
+		if (!activeRole) return;
+		const role = config.roles[activeRole];
+		if (!role) return;
+		const allowed = new Set(resolveTools(role, toolPool()));
+		if (allowed.size === 0) return;
+
+		let changed = false;
+		const messages = event.messages.map((message) => {
+			const declarations = (message as { toolsAdded?: { name: string }[] }).toolsAdded;
+			if (message.role !== "system" || !declarations) return message;
+			const toolsAdded = declarations.filter((tool) => allowed.has(tool.name));
+			if (toolsAdded.length === declarations.length) return message;
+			changed = true;
+			return { ...message, toolsAdded };
+		});
+		return changed ? { messages } : undefined;
+	});
+
 	pi.on("before_agent_start", (event, ctx) => {
 		if (!activeRole) return;
 		const role = config.roles[activeRole];

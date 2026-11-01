@@ -99,7 +99,7 @@
     },
     "local": {
       "description": "Basic edit tasks on local model (Mac mini)",
-      "model": "bifrost/qwen/qwen3.5-9b",
+      "model": "bifrost/qwen3.5-9b-mlx",
       "promptMode": "replace",
       "systemPrompt": ".",
       "tools": {
@@ -110,11 +110,26 @@
           "hypa_grep",
           "hypa_shell",
           "hypa_find",
-          "hypa_ls"
+          "hypa_ls",
+          "web_search"
         ]
       },
       "skills": [],
-      "hidden": true
+      "hidden": false
+    },
+    "ticketor": {
+      "description": "kb ticket manager",
+      "model": "bifrost/qwen3.8-27b",
+      "promptMode": "replace",
+      "systemPrompt": "You manage tickets with the kb cli. This is the only way to manage tickets.",
+      "tools": {
+        "allow": [
+          "hypa_shell",
+          "web_search"
+        ]
+      },
+      "skills": [],
+      "hidden": false
     },
     "small": {
       "description": "Basic simple tasks (Haiku)",

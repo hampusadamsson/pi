@@ -75,6 +75,8 @@
           "mcp__atlassian__jira_create_issue",
           "mcp__atlassian__jira_get_issue",
           "mcp__atlassian__jira_update_issue",
+          "mcp__atlassian__jira_add_comment",
+          "mcp__atlassian__confluence_add_comment",
           "mcp__humio__search",
           "mcp__humio__list_repos",
           "mcp__snowflake__run_snowflake_query"

@@ -55,7 +55,9 @@
         "jira_search": "direct",
         "jira_create_issue": "direct",
         "jira_get_issue": "direct",
-        "jira_update_issue": "direct"
+        "jira_update_issue": "direct",
+        "jira_add_comment": "direct",
+        "confluence_add_comment": "direct"
       }
     }
   }

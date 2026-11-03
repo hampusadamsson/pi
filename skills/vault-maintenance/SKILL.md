@@ -15,11 +15,15 @@ Vault root, OKF, approval gate and proposal format: `/skill:obsidian` (single so
 - Follow the obsidian skill's write approval gate; never apply the whole plan automatically. No edits during scan.
 - `0-daily/` and `3-journal/`: read-only.
 
+## Tools
+
+File tools only: `hypa_read`, `hypa_grep`, `hypa_find`, `hypa_ls`, `edit`, `write`, `mv`.
+
 ## Workflow
 
 ### 1. Scan
 
-Index every page in `1-wiki/` plus its `index.md` MOCs. Build the entity list: one entity = one page, stable name, no date prefix. Note each page's frontmatter (`tags`, `status`, `resource`, `owner`), sections, and links.
+Index every page in `1-wiki/` (`hypa_find`). Build the entity list: one entity = one page, stable name, no date prefix. Note each page's frontmatter (`type`, `tags` incl. `status/*`, `resource`, `owner`), sections, and links.
 
 ### 2. Conflict & dedup check
 
@@ -31,33 +35,33 @@ Index every page in `1-wiki/` plus its `index.md` MOCs. Build the entity list: o
 
 - **`resource:` frontmatter** — re-read each pointer (repo, Confluence page, table, daily note). Diff source against the page. Flag new info, stale info, and changed facts.
 - **`# Links` operational URLs** — verify each still resolves. Flag dead or moved links.
-- **`[[wikilinks]]`** — verify every target exists. Flag broken links and orphans (pages no MOC links to).
+- **`[[wikilinks]]`** — verify every target exists. Flag broken links (propose fixing or unlinking) and orphans (pages with no inbound `[[link]]`).
 
 ### 4. Improvements & suggestions
 
 - Entities referenced but missing a page.
-- MOC `index.md` gaps (page not listed, renamed page not updated).
 - Tag-vocab violations (unknown tags).
-- Format drift: title headings in body, bold/italic instead of headings, missing `# See also`.
-- Stale `status/` values, missing `owner:` on service pages.
+- Format drift: an H1 in the body that is not a standard section, bold/italic instead of headings, missing `# See also`.
+- `type:` vs primary `type/` tag mismatch.
+- Stale `status/` tags, missing `owner:` on service pages.
 
 ### 5. Proposals — prioritized
 
 Use the obsidian proposal format, ids prefixed by priority:
 
 - **A. High** — conflicts, duplicates, wrong/stale facts, broken links, dead resources.
-- **B. Medium** — stale content, missing cross-links, MOC gaps.
+- **B. Medium** — stale content, missing cross-links.
 - **C. Low** — formatting, tag cleanup, missing `# See also`.
 
-Each item: `A1` etc. — action, target note, one-line reason (+ proposed fix). User replies with letters, numbers, or ranges (e.g. `A1 A3`, `B2-4`, `C`). Apply only the selected items.
+Each item: `<id>. [<action>] <target note> — <one-line reason>` with the exact proposed fix beneath (e.g. `A1. [edit] work/tools/foo.md — broken [[bar]]`). User replies with letters, numbers, or ranges (e.g. `A1 A3`, `B2-4`, `C`). Apply only the selected items.
 
 ### 6. Apply (selected only)
 
-1. Update content per selection; timestamp, `index.md` and cross-links per the obsidian gate.
+1. Update content per selection; timestamp and cross-links per the obsidian gate.
 2. Report what changed and what was left.
 
 ## Reference
 
-- `/skill:obsidian` — gate, proposal format, MCP tools
+- `/skill:obsidian` — gate, proposal format
 - Vault spec/tag vocab: `/Users/hampus.adamsson/.pi/agent/skills/obsidian/references/vault-spec.md`
 - Templates: `/Users/hampus.adamsson/.pi/agent/skills/obsidian/references/templates.md`

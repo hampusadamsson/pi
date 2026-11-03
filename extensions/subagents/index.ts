@@ -22,7 +22,10 @@
  *
  * While background runs are active, an "Active subagents" section is appended
  * to the system prompt (composed with other extensions' prompt edits) and the
- * footer shows the active count. Completed/failed runs notify the user.
+ * footer shows the active count. Ended runs notify the user, and completed/
+ * failed/timed_out runs also wake the model (custom message, followUp +
+ * triggerTurn) so it can collect or retry — unless a `wait` is already
+ * blocking on that run. Stopped runs never wake the model.
  * Tool name: `subagents` (plural) to match the roles.json tool allowlists.
  */
 
@@ -94,6 +97,29 @@ function discoverRoles(): string[] {
 	return [...roles].sort();
 }
 
+/** Model configured for a role (roles.json or roles/<name>.json), if any. */
+function roleModel(role: string): string | undefined {
+	const agentDir = join(homedir(), ".pi", "agent");
+	const pick = (v: unknown): string | undefined => {
+		const m = (v as { model?: unknown } | undefined)?.model;
+		return typeof m === "string" && m ? m : undefined;
+	};
+	try {
+		const file = JSON.parse(readFileSync(join(agentDir, "roles.json"), "utf8")) as {
+			roles?: Record<string, unknown>;
+		};
+		const m = pick(file.roles?.[role]);
+		if (m) return m;
+	} catch {
+		/* ignore */
+	}
+	try {
+		return pick(JSON.parse(readFileSync(join(agentDir, "roles", `${role}.json`), "utf8")));
+	} catch {
+		return undefined;
+	}
+}
+
 // ---------------------------------------------------------------- state
 
 type RunState = "queued" | "running" | "completed" | "failed" | "timed_out" | "stopped";
@@ -126,6 +152,8 @@ interface Run {
 	invocation?: string;
 	/** Rolling tail of the child's stderr, so the real reason survives the stack header. */
 	stderrTail: string;
+	/** Number of `wait` calls currently polling this run (suppresses the wake-up). */
+	waiters?: number;
 }
 
 let config = loadConfig();
@@ -159,11 +187,38 @@ function markFinished(run: Run): void {
 
 /** Latest session context for notify + footer status. */
 let currentCtx: ExtensionContext | undefined;
+let piApi: ExtensionAPI | undefined;
 
 function notifyRunEnded(run: Run): void {
 	const note = `Subagent ${run.role} ${run.state.replace("_", " ")} (${run.id})`;
 	if (currentCtx?.hasUI) {
 		currentCtx.ui.notify(note, run.state === "completed" ? "info" : "warning");
+	}
+	wakeModel(run);
+}
+
+/** Inject a short custom message so the model can collect/retry; queued if mid-turn. */
+function wakeModel(run: Run): void {
+	if (!piApi) return;
+	if (run.state !== "completed" && run.state !== "failed" && run.state !== "timed_out") return;
+	if (run.waiters) return; // a wait call is already delivering the result
+	const elapsed = Math.round(((run.endedAt ?? Date.now()) - run.spawnedAt) / 1000);
+	const hint =
+		run.state === "completed"
+			? `Collect the result with subagents wait/status id "${run.id}".`
+			: `You may retry (larger timeoutSeconds or a smaller split task). Fetch the partial output with subagents status/wait id "${run.id}".`;
+	const content = [
+		`Subagent run ${run.id} (${run.role}) ${run.state} after ${elapsed}s.`,
+		`task: ${run.task.slice(0, 200)}`,
+		hint,
+	].join("\n");
+	try {
+		piApi.sendMessage(
+			{ customType: "subagents", content, display: true, details: { id: run.id, state: run.state } },
+			{ triggerTurn: true, deliverAs: "followUp" },
+		);
+	} catch (err) {
+		console.warn(`[subagents] wake-up failed: ${err instanceof Error ? err.message : String(err)}`);
 	}
 }
 
@@ -441,13 +496,22 @@ const SubagentToolParams = Type.Object({
 async function waitPoll(id: string | undefined, deadlineMs: number): Promise<Run | undefined> {
 	const started = Date.now();
 	return new Promise((resolve) => {
+		let held: Run | undefined; // run flagged as being waited on
+		const done = (r: Run | undefined) => {
+			if (held) held.waiters = (held.waiters ?? 1) - 1;
+			resolve(r);
+		};
 		const tick = () => {
 			const candidates = id ? [runs.get(id)] : [...runs.values()];
 			const target = candidates.find((r) => r !== undefined);
-			if (!target) return resolve(undefined);
-			if (id && target.id !== id) return resolve(undefined);
-			if (!isActive(target)) return resolve(target);
-			if (Date.now() - started >= deadlineMs) return resolve(target);
+			if (!target) return done(undefined);
+			if (id && target.id !== id) return done(undefined);
+			if (!held) {
+				held = target;
+				target.waiters = (target.waiters ?? 0) + 1;
+			}
+			if (!isActive(target)) return done(target);
+			if (Date.now() - started >= deadlineMs) return done(target);
 			setTimeout(tick, 500);
 		};
 		tick();
@@ -455,6 +519,7 @@ async function waitPoll(id: string | undefined, deadlineMs: number): Promise<Run
 }
 
 export default function (pi: ExtensionAPI) {
+	piApi = pi;
 	pi.registerTool({
 		name: "subagents",
 		label: "Subagent",
@@ -598,13 +663,12 @@ export default function (pi: ExtensionAPI) {
 		},
 
 		renderCall(args, theme) {
-			const preview = args.task
-				? args.task.length > 60
-					? `${args.task.slice(0, 60)}...`
-					: args.task
-				: "";
+			const oneLine = args.task ? args.task.replace(/\s+/g, " ").trim() : "";
+			const preview = oneLine.length > 100 ? `${oneLine.slice(0, 100)}...` : oneLine;
+			const model = args.action === "spawn" && args.role ? roleModel(args.role) : undefined;
 			let text = theme.fg("toolTitle", theme.bold("subagent ")) + theme.fg("accent", args.action ?? "?");
 			if (args.role) text += theme.fg("accent", ` ${args.role}`);
+			if (model) text += theme.fg("muted", ` (${model})`);
 			if (args.id) text += theme.fg("muted", ` ${args.id}`);
 			if (preview) text += `\n  ${theme.fg("dim", preview)}`;
 			return new Text(text, 0, 0);

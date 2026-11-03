@@ -10,6 +10,7 @@ Rules: concrete over vague (`exact query/command`, not "checked logs"). Search b
 
 Never use kubectl cli.
 Never use gcloud commands that can edit, destroy or otherwise impact services. Read only. Ask if required.
+Always load github skill before using gh.
 
 1. Think Before Coding — state assumptions; ask if uncertain. If multiple interpretations exist, list them, don't silently pick one. Flag simpler alternatives and overcomplication. Stop and ask if something's unclear.
 

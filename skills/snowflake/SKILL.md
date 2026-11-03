@@ -1,24 +1,22 @@
 ---
 name: snowflake
-description: Query Snowflake and inspect/query semantic views via the Snowflake MCP server. Use whenever a task needs data from Snowflake or semantic-layer metrics/dimensions.
+description: Run SQL against Snowflake via the Snowflake MCP server (`run_snowflake_query`). Use whenever a task needs data from Snowflake.
 ---
 
 # Snowflake (MCP)
 
-Tools: `run_snowflake_query`, `list_semantic_views`, `describe_semantic_view`, `show_semantic_dimensions`, `show_semantic_metrics`, `get_semantic_view_ddl`, `write_semantic_view_query_tool`, `query_semantic_view`, `read_get_tools_config`.
+Tool: `mcp__snowflake__run_snowflake_query`.
 
-## Raw SQL
+Server: stage POC MCP (`snowflake-agentic-poc-mcp.data.stage.lendo.dev`), role `AGENTIC_POC_ROLE`, warehouse `LENDO_WH`. No default database/schema: use fully qualified names (`DB.SCHEMA.TABLE`).
+
+## SQL
 
 - Real, billed warehouse, not free local DB. Always scope: `LIMIT` on exploratory `SELECT`s, filter by date/partition on large tables. No unfiltered `SELECT *`.
 - Mutating DDL/DML (`INSERT`/`UPDATE`/`DELETE`/`CREATE`/`DROP`/`ALTER`) — confirm with user first, state target warehouse/db/schema.
-- Check `read_get_tools_config` at session start for enabled scopes/warehouses.
-
-## Semantic layer (prefer over hand-rolled SQL for known metrics)
-
-`list_semantic_views` → `describe_semantic_view` → `show_semantic_dimensions`/`show_semantic_metrics` → `write_semantic_view_query_tool` (build, inspect) → `query_semantic_view` (build+run). `get_semantic_view_ddl` if metrics look off.
+- The server rejects some statement types (e.g. `SHOW ...` returns "Statement type of Command is not allowed"). Use `SELECT` on `INFORMATION_SCHEMA` to discover objects. The server may also reject DDL/DML.
 
 ## Guardrails
 
 - Confirm context first: `SELECT CURRENT_WAREHOUSE(), CURRENT_DATABASE(), CURRENT_SCHEMA()`.
-- PII: don't select PII columns (names, personal IDs, contact details) unless asked; for deletion/PII questions check the compliance-data-deletion docs first.
+- PII: don't select PII columns (names, personal IDs, contact details) unless asked.
 - Cost awareness: large scans / CTAS burn credits — size down first, ask if scale unclear.

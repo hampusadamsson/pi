@@ -19,7 +19,7 @@ Vault root, OKF, approval gate and proposal format: `/skill:obsidian` (single so
 
 1. Find raw notes: every `0-daily/*.md` whose frontmatter `tags` include `status/raw`.
 2. Extract candidate persistent knowledge from each note: facts, decisions, entities, ops learnings, source pointers.
-3. Map each candidate to a canonical page: scan `1-wiki/` and its `index.md` MOCs. One entity = one page, stable name, no date prefix. Never create duplicates.
+3. Map each candidate to a canonical page: grep `1-wiki/` titles/tags/`resource:`. One entity = one page, stable name, no date prefix. Never create duplicates.
 4. Classify each candidate:
    - **New page** — entity has no canonical page yet.
    - **Update** — extends or corrects an existing page.
@@ -28,14 +28,14 @@ Vault root, OKF, approval gate and proposal format: `/skill:obsidian` (single so
    - **Not wiki** — personal/log noise; stays in the daily note.
 5. Dedupe across notes: merge candidates that target the same page.
 6. Identify blind spots: missing info each page needs — unanswered questions, gaps the raw notes expose, sources still to consult. Do not invent facts to fill gaps.
-7. Present the plan in the obsidian proposal format (numbered: action, target note, one-line reason), with source daily note(s) and blind spots under each item. Actions: `create`, `edit`, `edit` (conflict, flagged), `frontmatter` (reference), `skip` (not wiki).
+7. Present the plan in the obsidian proposal format (numbered: action, target note, one-line reason), with source daily note(s) and blind spots under each item. Actions: `create`, `edit`, `edit` (conflict, flagged), `frontmatter` (reference), `merge` (duplicates), `skip` (not wiki).
 
 ## Phase 2 — Apply (only after approval)
 
 1. Create/update wiki pages per the plan, following the vault OKF (`obsidian` skill): approved items only.
-2. Set `resource:` on every touched page to point back to the source daily note(s).
-3. Update the map `index.md` for any new/renamed page. Cross-link with `[[...]]`.
-4. Remove `status/raw` from each processed daily note's `tags`. Keep every other tag and all body content untouched.
+2. On every touched page set `resource:` to the source daily note(s) and `timestamp:` to today (`YYYY-MM-DD`).
+3. Cross-link with `[[...]]`.
+4. Remove `status/raw` from each processed daily note's `tags` (also for notes whose candidates were all `skip`, once approved). Keep every other tag and all body content untouched.
 5. Report: what changed, what remains raw, and which blind spots are still open.
 
 ## Blind spots
@@ -44,6 +44,6 @@ For every planned page, state what's missing. Keep the list in the phase-1 plan 
 
 ## Reference
 
-- `/skill:obsidian` — gate, proposal format, MCP tools
+- `/skill:obsidian` — gate, proposal format
 - Vault spec/tag vocab: `/Users/hampus.adamsson/.pi/agent/skills/obsidian/references/vault-spec.md`
 - Templates: `/Users/hampus.adamsson/.pi/agent/skills/obsidian/references/templates.md`

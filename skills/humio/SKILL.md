@@ -1,22 +1,22 @@
 ---
 name: humio
-description: Query Humio (CrowdStrike LogScale) via the humio MCP server for DML/SE/NO/Kreddy application logs — errors, workload health, Airflow pipeline debugging. Use whenever a task needs log data, error investigation, or workload/service activity from Humio.
+description: Query Humio (CrowdStrike LogScale) via the humio MCP server for DML/SE/NO application logs — errors, workload health, Airflow pipeline debugging. Use whenever a task needs log data, error investigation, or workload/service activity from Humio.
 ---
 
 # Humio (LogScale MCP)
 
-Tools (as seen in sessions): `mcp__humio__search` and `mcp__humio__list_repos` are exposed directly (args: `query`, `repo`, `start`, `end`, `limit`). Others (`humio_get_config`) go via the proxy: `mcp({ tool: "humio_get_config", args: {} })`. Config via `HUMIO_TOKEN`/`HUMIO_ENDPOINT` env vars.
+Tools: `search` (args: `query`, `repo`, `start`, `end`, `limit`, `fields`, `extract`, `dedupe`), `list_repos`, `get_config`. All are deferred in `mcp.json`, so load them first. They appear as `mcp__humio__<name>`, or via the proxy: `mcp({ tool: "get_config", args: {} })`. Config via `HUMIO_TOKEN`/`HUMIO_ENDPOINT` env vars. Server: humio-mcp, pinned `@1.0.0`.
 
 Example:
 
 ```
-mcp__humio__search({ repo: "dml_lendo_prod", query: "kubernetes.labels.app=pcm-se log_processed.levelname=ERROR | groupBy(log_processed.message)", start: "7d", limit: 25 })
+mcp__humio__search({ repo: "dml_lendo_prod", query: "kubernetes.labels.app=pcm-se-v1 log_processed.levelname=ERROR | groupBy(log_processed.message)", start: "7d" })
 ```
 
 ## Repo/env selection
 
-- Defaults: DML model / Airflow → `dml_lendo_prod` (stage: `dml_lendo_stage`; the `lendo_dml_*` naming is the same set — use the table below). SE app → `se_lendo_month`. Kreddy → `kreddy_lendo_month`; NO → `no_lendo_pro`.
-- Don't re-ask which repo if the default fits; run `list_repos` only if unsure.
+- Visible repos: `dml_lendo_prod`, `dml_lendo_stage`, `no_lendo_pro`, `no_lendo_dev_pre`, `se_lendo_stage`. Run `list_repos` if unsure — the set can change.
+- Defaults: DML model / Airflow → `dml_lendo_prod`; NO → `no_lendo_pro`.
 - Before concluding, always state to the user the repo + env + time window used.
 - Day-bucketed counts: `timechart(span=1d)` or `bucket(span=1d)` + `groupBy`.
 - On timeout: retry with a narrower window and/or smaller `limit`.
@@ -24,56 +24,48 @@ mcp__humio__search({ repo: "dml_lendo_prod", query: "kubernetes.labels.app=pcm-s
 ## Repos → environment
 
 | Repo | Env | Notes |
-| --- | --- | --- |
+|---|---|---|
 | `dml_lendo_prod` | **DML prod** | primary repo for DML/ML model + Airflow pipeline logs |
 | `dml_lendo_stage` | DML stage | |
-| `se_lendo_month` | **SE prod** | Lendo SE app services (loan/insurance/etc, not DML models) |
-| `se_lendo_week`, `se_lendo_stage_week`, `se_lendo_dev_week` | SE stage/dev | |
-| `se_lendo_app`, `se_lendo_travis_24hours`, `se_lendo_year` | SE misc/longer retention | |
-| `kreddy_lendo_month` | **Kreddy prod** | `kreddy-api`, `bankid-service-v6`, etc. |
-| `kreddy_lendo_week`/`year` | Kreddy other windows | |
 | `no_lendo_pro` | **NO prod** | click-ops alerts (not IaC); low volume, mostly infra (`ebs-csi-controller`) |
-| `no_lendo_month`/`week`/`dev_pre` | NO other envs | `no_lendo_month` was empty in recent test — check window/repo before assuming no data |
-
-Always `humio_list_repos` first if unsure — repo set can change.
+| `no_lendo_dev_pre` | NO dev/pre | |
+| `se_lendo_stage` | SE stage | |
 
 ## Query syntax — tested gotchas
 
-- **Field filters: write names unquoted** (`kubernetes.labels.app=pcm-se`) — a quoted string on its own is free-text search. Exception: the Airflow examples below use the quoted form `"log_processed.name" = value` and were verified live; if a quoted filter returns 0 rows unexpectedly, retry unquoted (and vice versa).
+- **Field filters: write names unquoted** (`kubernetes.labels.app=pcm-se-v1`) — a quoted string on its own is free-text search. Exception: the Airflow examples below use the quoted form `"log_processed.name" = value` and were verified live; if a quoted filter returns 0 rows unexpectedly, retry unquoted (and vice versa).
 - **Free-text + field filter = space (implicit AND), never a pipe.** `"error" | kubernetes.labels.app=airflow` splits into two pipeline stages and returns 0 rows. Correct: `kubernetes.labels.app=airflow ERROR`.
 - **"N event(s) matched" is the pre-pipeline scan count**, not the row count after `groupBy`/`timechart`. Verify real counts with `groupBy(field, function=count())`.
 - Prefer **one broad query** (wide time window, filters/pipes in the query string) over many narrow calls — each call re-scans server-side.
 - `head(n)`/`tail(n)` is the reliable way to eyeball raw events and discover field names before building a filtered query.
-- `fields`/`extract` MCP args are unreliable (drop rows silently on name mismatch) — safer to read full JSON and pick fields from that.
-- `end` rejects `"now"` — use `start` only, or ISO8601/epoch ms.
-- Hard cap 500 events/call, MCP default limit 25.
-- Most DML services log structured JSON with a `log_processed.*` prefix (parsed from the raw JSON payload): `log_processed.levelname`, `log_processed.message`, `log_processed.name`, `log_processed.funcName`. Airflow's own container logs (webserver/scheduler) are **not** pre-parsed this way — they're plain text/JSON needing `parseJson()`/`kvParse()` (see Airflow example below) or free-text `ERROR` matching.
+- `fields`/`extract` MCP args can drop rows silently on name mismatch — if rows go missing, read full JSON and pick fields from that.
+- `end: "now"` is accepted. Omit `end` if a client rejects it.
+- Hard cap 500 events/call. Default limit is 100 (output says "truncated at limit=100"). Narrow the query instead of raising `limit`.
+- DML services and Airflow scheduler logs are parsed into `log_processed.*`: `log_processed.levelname`, `log_processed.message`, `log_processed.name`, `log_processed.funcName`. `parseJson()`/`kvParse()` are only needed to pull key=value pairs out of the message text (e.g. `dag_id`, `run_duration`).
 
 ## Finding ERRORS for a specific workload
 
-For services with parsed `log_processed.*` fields (models, APIs — most non-Airflow DML workloads):
-
 ```
-kubernetes.labels.app=pcm-se log_processed.levelname=ERROR
+kubernetes.labels.app=pcm-se-v1 log_processed.levelname=ERROR
 | groupBy(log_processed.message)
 ```
 
-Tested live (undated; `dml_lendo_prod`, `pcm-se`, 30d): 0 matches — confirms the pattern runs clean even with no errors present. Swap `pcm-se` for any workload from the table below.
+Use the exact app label from the discovery query below. `pcm-se` is not a label; `pcm-se-v1` is. A label that doesn't exist returns 0 matches, which is not the same as "no errors".
 
-For Airflow (container logs, no `log_processed.levelname` field) — free-text ERROR + groupBy on the raw message:
+For Airflow:
 
 ```
 kubernetes.labels.app=airflow ERROR
 | groupBy("log_processed.message")
 ```
 
-Tested live (undated; `dml_lendo_prod`, 7d): 28 matching events, 15 distinct grouped messages — real errors surfaced included zombie task detection, scheduler exceptions, otel-collector connection timeouts, and specific DAG run failures (`Marking run <DagRun ...> failed`).
+Re-verified 2026-11-03 (`dml_lendo_prod`, 7d): 18 events, mostly `Marking run <DagRun ...> failed`, `Failed to get task for ti`, scheduler loop exceptions. Counts change; don't rely on them.
 
-General template: `kubernetes.labels.app=<workload> [level filter or free-text ERROR] | groupBy(<message field>)`. Always run `head(3)` on the workload first if unsure whether it's a `log_processed.*`-parsed service or raw container logs.
+General template: `kubernetes.labels.app=<workload> [level filter or free-text ERROR] | groupBy(<message field>)`. Run `head(3)` on the workload first if unsure of the fields.
 
 ## Workloads
 
-Full, maintained workload list: see the `humio` wiki page (`1-wiki/work/tools/humio.md`; access via `obsidian` skill). It drifts as services deploy/retire — don't trust a static list. Airflow apps: `airflow`, `airflow-worker`. Discover the current set live:
+Full, maintained workload list: see the `humio` wiki page (`1-wiki/work/tools/humio.md`; access via `obsidian` skill). It drifts as services deploy/retire — don't trust a static list. Airflow-related apps: `airflow`, `airflow-worker`, `airflow-flower`, `cloudsql-proxy-airflow` (sidecar, high volume). Discover the current set live:
 
 ```
 mcp__humio__search({
@@ -103,15 +95,15 @@ mcp__humio__search({
 | sort("Total Failures", order=desc)
 ```
 
-Both verified against `dml_lendo_prod` (undated). Don't hardcode specific `dag_id` values into reusable queries — discover current ones live via `groupBy(dag_id, function=count())` first, they change over time.
+Both re-verified 2026-11-03 against `dml_lendo_prod` (7d). The TaskInstance query matched 169 events but showed only 100, so averages are truncated: add `limit: 500` or narrow the window. Don't hardcode specific `dag_id` values into reusable queries — discover current ones live via `groupBy(dag_id, function=count())` first.
 
 ## Discovery
 
 ```
 mcp__humio__list_repos({})
-mcp({ tool: "humio_get_config", args: {} })
+mcp__humio__get_config({})
 ```
 
 ## Source
 
-CLI/MCP server: [humio-mcp](https://lendo-group.ghe.com/lendo-data-ml/humio-mcp) — shared core, `search`/`list_repos`/`get_config`. Full wiki page: `1-wiki/work/tools/humio.md` (alert IaC ownership, auth via Okta, Slack alert routing).
+MCP server: [humio-mcp](https://lendo-group.ghe.com/lendo-data-ml/humio-mcp) — `search`/`list_repos`/`get_config`. Full wiki page: `1-wiki/work/tools/humio.md` (alert IaC ownership, auth via Okta, Slack alert routing).

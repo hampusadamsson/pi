@@ -3,7 +3,7 @@
   "roles": {
     "work": {
       "description": "Senior dev. Write and test code",
-      "model": "bifrost/opencode-go/deepseek-v4.1-flash",
+      "model": "vertex-anthropic/claude-sonnet-5-5",
       "systemPrompt": "You are a developer. You are direct, efficient and brief.",
       "promptMode": "replace",
       "tools": {
@@ -19,12 +19,13 @@
         "deny": []
       },
       "skills": [
-        "obsidian"
+        "obsidian",
+        "github"
       ]
     },
     "architect": {
       "description": "Delegator: plans and reviews, does all work through subagents",
-      "model": "bifrost/opencode-go/deepseek-v4.1-flash",
+      "model": "vertex-anthropic/claude-sonnet-5-5",
       "promptMode": "append",
       "systemPromptFile": "prompts/architect.md",
       "tools": {
@@ -38,13 +39,14 @@
         ]
       },
       "skills": [
-        "obsidian"
+        "obsidian",
+        "github"
       ],
       "hidden": false
     },
     "researcher": {
       "description": "Research assistant with access to all skills (Jira, Confluence, GitHub, Obsidian, Snowflake, Humio)",
-      "model": "bifrost/opencode-go/deepseek-v4.1-flash",
+      "model": "vertex-anthropic/claude-sonnet-5-5",
       "promptMode": "append",
       "systemPromptFile": "prompts/researcher.md",
       "tools": {
@@ -115,7 +117,7 @@
         ]
       },
       "skills": [],
-      "hidden": false
+      "hidden": true
     },
     "ticketor": {
       "description": "kb ticket manager",
@@ -129,11 +131,11 @@
         ]
       },
       "skills": [],
-      "hidden": false
+      "hidden": true
     },
     "small": {
       "description": "Trivial mechanical tasks: small edits, commits, verification runs. Cheapest role.",
-      "model": "bifrost/opencode-go/glm-5.3-flash",
+      "model": "vertex-anthropic/claude-haiku-5-5",
       "promptMode": "replace",
       "systemPrompt": "You are an agent working on a task. Your job is small, precise, mechanical edits and file operations. Follow the instructions exactly. Do not investigate, refactor or make judgement calls; if the task needs engineering judgement, say so instead of guessing.",
       "tools": {
@@ -147,12 +149,14 @@
           "hypa_ls"
         ]
       },
-      "skills": [],
+      "skills": [
+        "github"
+      ],
       "hidden": true
     },
     "retriever": {
       "description": "Read-only information retrieval (Jira, Confluence, GitHub, Obsidian, Snowflake, Humio) on the cheapest model",
-      "model": "bifrost/opencode-go/deepseek-v4.1-flash",
+      "model": "vertex-anthropic/claude-haiku-5-5",
       "promptMode": "append",
       "systemPromptFile": "prompts/retriever.md",
       "tools": {
@@ -180,6 +184,20 @@
         "snowflake",
         "humio"
       ],
+      "hidden": true
+    },
+    "jira-ro": {
+      "description": "Read-only Jira",
+      "model": "vertex-anthropic/claude-haiku-5-5",
+      "promptMode": "replace",
+      "systemPrompt": ".",
+      "tools": {
+        "allow": [
+          "mcp__atlassian__jira_search",
+          "mcp__atlassian__jira_get_issue"
+        ]
+      },
+      "skills": [],
       "hidden": true
     }
   }

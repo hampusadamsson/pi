@@ -1,6 +1,6 @@
 # Note Templates
 
-Source: vault `template/` directory. Use these to create new pages after user approval. `create_note` (id = folder path + page name, no `.md`; replace `{{date}}` with actual date in frontmatter).
+Source: vault `template/` directory. Use these to create new pages after user approval. Create with `write` at `1-wiki/<realm>/<map>/<name>.md`; replace `{{date}}` with the actual date in frontmatter.
 
 ## wiki (canonical)
 
@@ -115,7 +115,7 @@ owner: dml                   # dml | lendo-se | lendo-no | lendo-pfm
 resource: []                # source-of-truth the agent re-reads to refresh this page (repo, Confluence). NOT operational links — those go in # Links
 ---
 
-Short plain-language description of the service. Models: include the ML#### id.
+Short plain-language description of the service.
 
 # Summary
 
@@ -125,7 +125,6 @@ What it does, who consumes it, high-level behaviour.
 
 - Code: repo (where it lives)
 - Runs: cluster · namespace · deployment · env (where it runs)
-- ML id: ML####            (models only)
 
 # Auth
 

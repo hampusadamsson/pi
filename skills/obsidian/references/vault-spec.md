@@ -2,7 +2,7 @@
 
 Vault root: see `obsidian/SKILL.md`.
 
-Top level. Each map has an `index.md` (MOC) — keep current on add/rename. Max depth 2 under a realm.
+Max depth 2 under a realm.
 
 ## Architecture
 
@@ -10,7 +10,6 @@ Top level. Each map has an `index.md` (MOC) — keep current on add/rename. Max 
 | --- | --- |
 | `0-daily/` | Capture zone. `YYYY-MM-DD[ context].md`. Read-only for the agent. |
 | `1-wiki/` | Distilled knowledge. Two realms: `work/`, `private/`. |
-| `2-archive/` | Soft delete. |
 | `3-journal/` | Private journaling (vomit). NOT wiki. Filled manually. |
 | `attachment/` · `Excalidraw/` · `template/` | Assets, diagrams, templates. |
 
@@ -19,7 +18,7 @@ Top level. Each map has an `index.md` (MOC) — keep current on add/rename. Max 
 | Map | Holds |
 | --- | --- |
 | `tools/` | Platforms & CLIs you USE. Managed SaaS (`tool/managed`: argocd, snowflake) or local CLI (`tool/local`: k9s, uv, gh). Ref manual per page. |
-| `services/` | Things WE deploy or integrate: coded services, models, market frontends. `owner:` set. `index.md` doubles as ML#### inventory (id │ page │ market │ owner │ status). |
+| `services/` | Things WE deploy or integrate: coded services, models, market frontends. `owner:` set. |
 | `platform/` | Architecture, standards, roadmap, RFCs, gitops concept, `.canvas` diagrams. |
 | `howto/` | Cross-tool techniques only. Tool-specific steps go in that tool's page. |
 
@@ -32,25 +31,22 @@ Top level. Each map has an `index.md` (MOC) — keep current on add/rename. Max 
 | `projects/` | Personal builds (homelab, agent-harness, bookmaker). |
 | `dev/` | Personal machine setup CLIs (`tool/local`: nvim, shell, nix-dotfiles, brew, ollama). |
 | `career/` | CV, external engagements. |
+| `ai/` | AI tooling and agent setup. |
 
 ### Layout
 
 ```
 0-daily/                      capture, read-only
 1-wiki/
-  index.md                    root MOC
   work/
-    index.md
-    tools/      index.md + one page per platform/CLI (tool/managed | tool/local)
-    services/   index.md (ML#### inventory) + coded svcs, models, frontends
+    tools/      one page per platform/CLI (tool/managed | tool/local)
+    services/   coded svcs, models, frontends
     platform/   architecture, planning, standardization, roadmap, gitops,
                 rfc-*.md, *.canvas
     howto/      cross-tool techniques only
   private/
-    index.md
-    family/  learning/  dev/  projects/  career/
+    family/  learning/  dev/  projects/  career/  ai/
 3-journal/                    vomit, NOT wiki, manual
-2-archive/                    soft delete (retired ML models, legacy)
 attachment/  Excalidraw/  template/
 ```
 
@@ -68,7 +64,7 @@ Sections: Summary · Install · Auth · How-to · Links · Incidents · Depends 
 
 Sections: Summary · Lives&Runs · Auth · How-to · Links · Incidents · Depends/Surfaces · See also.
 
-- `owner` in frontmatter. Models use `type/model` (instead of `type/service`) + `ML####` id. Template: `templates.md` (service, incl. `## Changelog`).
+- `owner` in frontmatter. Models use `type/model` (instead of `type/service`). Template: `templates.md` (service, incl. `## Changelog`).
 
 ### General rules
 
@@ -101,7 +97,7 @@ No title heading in the body — the filename is the title.
 - `type` — matches the primary `type/` tag.
 - `description` — one line, optimised for LLM search.
 - `tags` — hierarchical, from the vocabulary below.
-- `timestamp` — the template shows `{{date}}` as a placeholder for Obsidian's own template-insertion syntax. When the agent creates/edits a page via `create_note` / `update_note`, substitute the actual current date (`YYYY-MM-DD`) — never leave the literal string `{{date}}` in a saved note.
+- `timestamp` — the template shows `{{date}}` as a placeholder for Obsidian's own template-insertion syntax. When the agent creates/edits a page substitute the actual current date (`YYYY-MM-DD`) — never leave the literal string `{{date}}` in a saved note.
 - `resource` — machine-readable pointer(s) to the source of truth the agent reads to refresh this page (repo path, Confluence URL, Snowflake table, source daily note). For the LLM, not humans. String or list. Human/operational URLs (console stage/prod, dashboards) go in the `# Links` section, not here.
 - `# Links` — in-body table of operational URLs for people: console (stage/prod), docs, dashboards.
 - `owner` — services only: who owns the code (`dml` = ours; `lendo-se`/`lendo-no`/`lendo-pfm` = integrate). Kreddy = `lendo-pfm`.
@@ -116,7 +112,7 @@ No title heading in the body — the filename is the title.
 - **Links in one section** — a table of code / service / docs URLs. Descriptive text, never a bare URL.
 - **Progressive disclosure:** overview first, detail below. One subject per page; never skip heading levels.
 - **Scannable:** prefer tables/lists over prose. Fence code with a language and a labelling comment.
-- **No orphans:** every page is linked from its map `index.md` and ends with `# See also`.
+- **No orphans:** every page is linked from at least one other page and ends with `# See also`.
 - **Living pages:** update in place; bump `timestamp` = last reviewed. State (status, owner) lives in frontmatter, not in the body.
 - **KISS:** Simple. Flat where possible. Never overcomplicate.
 - **Short & technical:** Fewest words. No adjectives. One subject per note.
@@ -136,7 +132,7 @@ Use these only. Request approval before adding a new tag. Folders carry domain; 
 
 `status/raw`, `status/seedling`, `status/active`, `status/idea`
 
-`status/raw` = not yet processed by the agent. No `deprecated` status: retired/legacy entities (e.g. travis, spinnaker) move to `2-archive/`; `1-wiki/` is active-only. No `evergreen` or `note` tags/types.
+`status/raw` = not yet processed by the agent.
 
 ### market/ (market / business unit)
 

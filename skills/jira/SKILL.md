@@ -9,8 +9,8 @@ MCP only, never REST/CLI.
 
 ## Invocation
 
-- Directly exposed tools (per `mcp.json`): `jira_search`, `jira_get_issue`, `jira_create_issue`, `jira_update_issue` — call as `mcp__atlassian__<tool>`.
-- Every other Jira tool goes through the `mcp` proxy as `atlassian_<tool>`:
+- Directly exposed tools (per `mcp.json`): `jira_search`, `jira_get_issue`, `jira_create_issue`, `jira_update_issue`, `jira_add_comment` — call as `mcp__atlassian__<tool>`.
+- Every other Jira tool goes through the `mcp` proxy as `atlassian_<tool>`. Roles without the `mcp` tool (e.g. `researcher`) cannot call them:
 
 ```
 mcp({ tool: "atlassian_jira_get_project_issue_types", args: { project_key: "DATA" } })
@@ -32,8 +32,20 @@ Tool names below are written without prefix. Result text is JSON in `content[0].
 
 ### Known failures
 
-- `jira_create_issue` with `customfield_10014` (epic link) fails ("cannot be set. It is not on the appropriate screen, or unknown") — seen 12+ times. No working approach found in sessions: check createmeta (`jira_get_create_fields`) first; for epics try `parent: {key}` in `additional_fields` or `jira_link_to_epic` after creation (untested).
-- Subtasks: `issue_type` must be `"Subtask"` (not `"Sub-task"`) and `parent` goes in `additional_fields`. Verify with createmeta if it still errors.
+- `customfield_10014` (epic link) fails ("not on the appropriate screen"). Don't use it.
+- **Parent/epic link: pass `parent` as a plain string in `additional_fields`: `{"parent": "DATA-1816"}`.** The object form `{"parent": {"key": "..."}}` fails with `expected 'key' property to be a string`. The string form worked for Tasks under an Epic.
+- Subtasks: `issue_type` must be `"Subtask"` (not `"Sub-task"`), and `parent` goes in `additional_fields` as a plain string. The type name `Subtask` is confirmed on existing issues; the create call itself is untested.
+
+### Notes
+
+- Schema lookup tools (`jira_get_project_issue_types`, `jira_get_create_fields`, `jira_search_fields`) may be unavailable in some roles (e.g. `researcher` only has search, get, create, update, comments). Fallback: read a sample issue of the same type with `jira_get_issue` (`fields: "*all"`, once with display names and once without) to get real field IDs and value shapes.
+
+### Observed behaviour
+
+- `jira_search` text queries (`text ~ ...`) are loose and `total` can be -1, so dedupe may be incomplete.
+- New tickets default to Medium priority, status Backlog, no assignee.
+- Parallel creates interleave key numbers (not duplicates).
+- `# Background` / `# Acceptance Criteria` markdown headings work; Jira adds blank lines around them.
 
 ### Guardrails
 
@@ -42,6 +54,7 @@ Tool names below are written without prefix. Result text is JSON in `content[0].
 
 ## Ticket format (user preferences)
 
+- Use simple words. Be brief and to the point.
 - **Background** + **Acceptance criteria**. Criteria are declarative state-after-implementation ("X is Y"), not tasks.
 - When asked for plain text: no markdown/formatting.
 - When asked to "echo the ticket only": output just the ticket, no commentary, and don't create it.
@@ -62,24 +75,24 @@ Tool names below are written without prefix. Result text is JSON in `content[0].
 - {{COMPONENT}} is {{OBSERVABLE_STATE}}
 ```
 
-Project: DATA (DML Data & Machine Learning), project id 10320. Issue types: Task, Epic, Bug, Subtask (Task id seen: 12197).
-Status flow: Backlog → Ready for prio → prioritized → In Progress → Done.
+Project: DATA (DML Data & Machine Learning Team). Issue types: Task (id 10478), Epic (10476), Bug, Subtask.
+Statuses seen: Backlog, Ready for prio, prioritized, In Progress, in review, Done, Closed, blocked, wont fix (names as shown). Not strictly linear: check transitions per issue.
 Board: <https://lendo-group.atlassian.net/jira/software/projects/DATA/boards/347>.
 
 ### Custom fields
 
-**UNVERIFIED since Sep 2026 migration — IDs changed in the migration; fetch via `jira_search_fields` / `jira_get_create_fields` before use.** (Not re-verified: no read access available when editing.)
+Verified by reading back issues: Area, Business unit, Epic Horizon, Task type, Rank, Start date. Flagged, Issue color and the integration fields are unverified.
 
 | Field ID | Name | Type | Notes |
 | --- | --- | --- | --- |
-| `customfield_11271` | Area | multicheckbox | `Platform`, `DS`, `AE` (sampled) |
-| `customfield_11274` | Task type | multicheckbox | `new-development`, `maintenance`, `tech-debt` (lowercase-kebab; `ad-hoc`, `onboarding` unverified) |
-| `customfield_11272` | Business unit | multicheckbox | `Sweden, Norway, Denmark, Internal` (sampled) |
-| `customfield_11273` | Epic Horizon | single-select | `Now`, `Next ` (trailing space!) — sampled |
+| `customfield_11271` | Area | multicheckbox | `Platform`, `DS`, `DE`, `AE` (sampled) |
+| `customfield_11274` | Task type | multicheckbox | `new-development`, `maintenance`, `tech-debt`, `ad-hoc` (lowercase-kebab; `onboarding` unverified) |
+| `customfield_11272` | Business unit | multicheckbox | `Sweden`, `Norway`, `Global`, `Internal` (sampled) |
+| `customfield_11273` | Epic Horizon | single-select | `Now`, `Next` (trailing space!) — sampled |
 | `customfield_10021` | Flagged | multi-checkbox | blockers |
 | `customfield_10019` | Rank | system | never set |
 | `customfield_10015` | Start date | date | Epic only |
-| `customfield_10013` | Epic Color | string | Epic only |
+| `customfield_10017` | Issue color | string | Epic only, unverified |
 | `customfield_10000`/`10668`/`10749` | Development/Design/Vulnerability | integration | never set |
 
 `jira_get_field_options` returns `[]` for the multicheckbox fields. Enumerate values from existing issues (run several orderings; sampled, not exhaustive):
@@ -91,12 +104,12 @@ jira_search({ jql: 'project=DATA AND "Task type" is not EMPTY ORDER BY created D
 
 Task type is lowercase-kebab-case; Area/Business unit/Epic Horizon are Capitalised. Subtasks usually have none set.
 
+Value shapes: Area, Business unit and Task type are arrays of plain strings, e.g. `["Platform"]`. Epic Horizon is a plain string, e.g. `"Now"` (no trailing space; `"Next "` has one). `tech-debt` and `Now` were accepted on create.
+
 Create example:
 
 ```
 jira_create_issue({ project_key: "DATA", issue_type: "Task", summary, description,
-  additional_fields: JSON.stringify({ priority: {name:"Medium"}, parent: {key:"DATA-1127"},
-    customfield_11271: [{value:"Platform"}], customfield_11274: [{value:"new-development"}] }) })
+  additional_fields: JSON.stringify({ priority: {name:"Medium"}, parent: "<OPEN_EPIC_KEY>",
+    customfield_11271: ["Platform"], customfield_11274: ["new-development"] }) })
 ```
-
-API tokens: <https://id.atlassian.com/manage-profile/security/api-tokens>

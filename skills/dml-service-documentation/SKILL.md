@@ -26,10 +26,10 @@ Prose-only content (ownership, intent, SLAs, runbooks, context) cannot be verifi
 
 ## Step 1: Retrieve data
 
-1. Wiki docs for {service}: check `1-wiki/services/` in the vault first (`obsidian` skill; vault path and write gate are defined there).
-2. Confluence docs for {service}: list pages under `spaces/LDML/folder/93094127` in Confluence and find the {service} page (`confluence` skill; IDs and API gotchas there).
-3. Code for {service}: use `github` skill (set `GH_HOST=lendo-group.ghe.com`), default branch unless the deployment config shows another. Consult the wiki if the repo is uncertain.
-4. Deployment config for {service}: use `github` skill. Consult the wiki if the repo is uncertain.
+1. Wiki docs for {service}: check `1-wiki/work/services/` in the vault first (files are named without the `dml-` prefix, e.g. `refinance-se.md`; `obsidian` skill: vault path and write gate).
+2. Confluence docs for {service}: `get_page_children` 404s on folder `93094127`. Use `confluence` `search` with `ancestor = 93094127` (space LDML) and match the title `dml-<service>` (versions or sister pages may exist). The folder also holds non-service pages (auth, API spec, markets-ci); ignore them unless linked. IDs and gotchas: `confluence` skill.
+3. Code for {service}: use `github` skill (set `GH_HOST=lendo-group.ghe.com`). Usually `lendo-data-ml/ml-core` `packages/dml-<service>*` (default `main`). Consult the wiki if the repo is uncertain.
+4. Deployment config for {service}: use `github` skill. Usually `lendo-data-ml/argocd-config` (default `master`) at `environments/<env>/workloads/{ml-deploy,retrain}/<name>`; for SE/NO workloads also `lendo-se/argocd-config` (`main`) and `lendo-sre/argocd-config-lendo-norway`. Consult the wiki if the repo is uncertain.
 
 5. Follow links and uses:
    - Follow links in wiki and Confluence docs (wikilinks, linked Confluence pages, repo, dashboard, runbook, and ADR links). Read linked docs that describe {service}. Flag broken, stale, or missing links.
@@ -54,7 +54,7 @@ Expect the docs to exist. If a doc is missing, say so in the report. Do not crea
 3. Changelog is stricter. Keep it sparse. Add only business-impacting, larger changes (for example new/removed capability, breaking API change, major infra or dependency migration, notable behavior change for users or consumers). Skip bot bumps, refactors, retraining/routine model refreshes, minor fixes, config/env/param changes, and anything with no business impact. When unsure, leave it out.
 4. Group changelog entries by date: one row/heading per date, with brief bullets for that date's changes. Do not add many rows per date or one row per commit/PR. Use merge/PR date, or the release date if one exists.
 5. Read the existing changelog in each doc before adding. If an item is already present, take no action. Otherwise add to the existing date's entry, or create a new date entry if none exists.
-6. The Changelog section format is defined in `obsidian` skill → `references/templates.md` (service template, `## Changelog`). Each doc (wiki and Confluence) has its own, and both must be updated.
+6. The Changelog section format is defined in `obsidian` skill → `references/templates.md` (service template, `# Changelog`, format `- YYYY-MM-DD — what changed — source`). Confluence keeps its existing `Date | Description` table. Both docs must be updated; if a page has no Changelog section, propose adding it.
 
 ## Step 4: Report, approve, edit
 

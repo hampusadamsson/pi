@@ -5,11 +5,11 @@
  * endpoint. Models are fetched from `/v1/models`; ids arrive as
  * `ollama/<model>` (Bifrost unified routing) and the prefix is stripped.
  *
- * Bifrost uses a self-signed cert (unable to verify by design). Instead of the
- * old process-wide NODE_TLS_REJECT_UNAUTHORIZED=0 (which leaked to Vertex, MCP
- * and web fetches, and into every child process), TLS verification is relaxed
- * ONLY for the Bifrost origin via a scoped split global dispatcher installed
- * here — see `installBifrostTlsScope`.
+ * Bifrost uses a self-signed cert (user-approved insecure). Pi's fetch
+ * (undici, used by both discovery here and the OpenAI SDK for chat) only
+ * trusts it with TLS verification off, so this extension sets
+ * NODE_TLS_REJECT_UNAUTHORIZED=0 at load. Runtime-set works (verified);
+ * NODE_EXTRA_CA_CERTS at runtime does not.
  *
  * Do not return an empty list from refreshModels: an empty return wipes the
  * provider's models and hides the provider from /model entirely. Startup
@@ -20,86 +20,9 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 
-// ---------------------------------------------------------------- TLS scope
-
-/**
- * Relax TLS verification for the Bifrost origin ONLY, leaving every other host
- * (Vertex, MCP servers, web fetches) fully verified.
- *
- * Mechanism: wrap the active global undici dispatcher so requests to the
- * Bifrost hostname are handled by a relaxed Agent; everything else falls
- * through to the original (pi-installed EnvHttpProxyAgent) dispatcher.
- * undici's Agent cannot compose per-origin connect options, so a thin
- * split-Dispatcher routes per-request by origin.
- */
-/**
- * Load the same undici copy the runtime uses. Resolution order:
- * 1. pi-coding-agent's bundled undici (installed globally beside pi), which
- *    matches the dispatcher pi configures at startup;
- * 2. the agent-local npm tree (pi-web-access pulls it);
- * 3. bare "undici" (already resolvable from this extension's location).
- * All of these control Node's built-in fetch via setGlobalDispatcher.
- */
-async function loadUndici(): Promise<any | undefined> {
-	const candidates = [
-		"/opt/homebrew/lib/node_modules/@earendil-works/pi-coding-agent/node_modules/undici/index.js",
-		new URL("../npm/node_modules/undici/index.js", import.meta.url).pathname,
-		new URL("../../npm/node_modules/undici/index.js", import.meta.url).pathname,
-		"undici",
-	];
-	for (const spec of candidates) {
-		try {
-			return await import(spec);
-		} catch {
-			// try next
-		}
-	}
-	return undefined;
-}
-
-let tlsScopeInstalled = false;
-function installBifrostTlsScope(): void {
-	if (tlsScopeInstalled) return;
-	tlsScopeInstalled = true;
-
-	loadUndici()
-		.then((undici: any) => {
-			const { Agent, Dispatcher } = undici;
-			const relaxed = new Agent({ connect: { rejectUnauthorized: false } });
-			const original = undici.getGlobalDispatcher();
-
-			class SplitDispatcher extends Dispatcher {
-				dispatch(opts: any, handler: any) {
-					let host = "";
-					try {
-						const origin =
-							typeof opts.origin === "string"
-								? opts.origin
-								: (opts.origin?.origin ?? String(opts.origin));
-						host = new URL(origin).hostname;
-					} catch {}
-					return (host === BIFROST_HOST ? relaxed : original).dispatch(opts, handler);
-				}
-				override close() {
-					return Promise.all([relaxed.close(), (original as any).close?.()]);
-				}
-				override destroy() {
-					return Promise.all([relaxed.destroy(), (original as any).destroy?.()]);
-				}
-			}
-			undici.setGlobalDispatcher(new SplitDispatcher());
-		})
-		.catch((err) => {
-			console.warn(
-				`[bifrost] could not install scoped TLS dispatcher: ${err instanceof Error ? err.message : String(err)} — Bifrost connections may fail with self-signed cert errors`,
-			);
-		});
-}
-
-installBifrostTlsScope();
+process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
 
 const BIFROST_BASE = (process.env.BIFROST_BASE ?? "https://bifrost.haadpi.duckdns.org:9443").replace(/\/+$/, "");
-const BIFROST_HOST = new URL(BIFROST_BASE).hostname;
 const API_KEY = process.env.BIFROST_API_KEY ?? "sk-bf-1818b6aa-a7fc-4eb5-9804-8650be3b2f7b";
 // Upstream prefixes stripped from ids (bare ids keep existing selections/roles
 // working). Comma-separated; everything else keeps its `provider/` prefix.

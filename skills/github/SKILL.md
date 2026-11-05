@@ -44,7 +44,7 @@ gh api orgs/<org>/teams/<slug>/members --jq '.[].login'
 
 ## Hard rules
 
-- Never mutate, except the create-PR flow in `references/pr.md` after user confirmation. Otherwise no `gh pr/issue/repo create|edit|delete`, no `-X POST/PUT/PATCH/DELETE`, no `git push/commit/merge/rebase`, no `gh workflow run`, no comments/approvals/merges/label/team/branch-protection changes.
+- Never mutate, except the create-PR flow in `references/pr.md` and posting PR review comments per `references/review.md`, each only after explicit user confirmation. Otherwise no `gh pr/issue/repo create|edit|delete`, no `-X POST/PUT/PATCH/DELETE`, no `git push/commit/merge/rebase`, no `gh workflow run`, no comments/approvals/merges/label/team/branch-protection changes.
 - Never commit or push to `main`/`master`/`develop`. Never force-push (`--force-with-lease` on own feature branches only).
 - If a command could plausibly write, stop and ask first.
 - Never print credentials (PATs, tokens, `.netrc`, SSH keys).
@@ -104,3 +104,4 @@ Not ground truth. Confirm with `gh repo view`.
 ## References
 
 - `references/pr.md` — branch/commit/PR conventions (all repos), create-PR steps, read-only PR research commands.
+- `references/review.md` — reviewing PRs: workflow, style, checklist; inline comments posted only after user confirmation.

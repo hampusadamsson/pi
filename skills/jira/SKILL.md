@@ -1,11 +1,22 @@
 ---
 name: jira
-description: Use Jira via the Atlassian MCP server (search, read, create, update, transition issues, sprints, worklogs). Use whenever a task involves looking up, filing, or modifying Jira tickets.
+description: Jira via the Atlassian MCP (search, read, create, update, transition, sprints). Load for any ticket work - drafting, proposing or echoing a ticket, 'create a ticket', 'write a ticket', epics, task type/area/horizon, DATA project conventions - and before any Jira write. No slash command needed.
 ---
 
 # Jira (Atlassian MCP)
 
 MCP only, never REST/CLI.
+
+## When to use
+
+- Always load this skill before any ticket draft or Jira write, even if the user only says "create a ticket" or "ticket for X". No slash command is needed.
+- Follow "Ticket format" and "DATA project conventions" below.
+- Map user phrases to custom fields (see Custom fields table):
+  - "platform" → Area `["Platform"]`
+  - "feature" → Task type `["new-development"]`
+  - "epic horizon now" → Epic Horizon `"Now"`
+- Draft first, confirm before create.
+- If the user says "read ticket skill and re-propose", redo the draft from this skill.
 
 ## Invocation
 

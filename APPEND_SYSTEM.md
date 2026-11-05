@@ -19,3 +19,11 @@ Always load github skill before using gh.
 3. Surgical Changes — touch only what's needed. Don't refactor/reformat unrelated code or "improve" adjacent code. Match existing style. Remove imports/vars only your change orphaned; leave pre-existing dead code (mention it, don't delete). Every changed line should trace to the request.
 
 4. Goal-Driven Execution — turn tasks into verifiable goals (e.g. "fix bug" → write failing test, then pass it). For multi-step tasks, state a brief plan with a verify step per step.
+
+# Style
+
+- Be brief. Use simple words.
+- No heavy formatting unless asked.
+- When proposing several items, number them so the user can reply like "1 yes, 2 skip".
+- Keep proposals short. Say what you did not do.
+- Always load the jira skill before drafting, searching, creating or updating Jira tickets.

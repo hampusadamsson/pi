@@ -30,6 +30,25 @@ Merge is per-role shallow merge; later source wins.
 }
 ```
 
+### `shellPolicy` (shell-policy extension)
+
+Per-role command allow/deny for `hypa_shell` and `bash`, evaluated by
+`extensions/shell-policy/`. A top-level `shellPolicy` sits next to `roles` and
+applies to every role; a per-role one narrows it.
+
+```jsonc
+{
+  "shellPolicy": { "allow": ["git *"], "deny": ["git push *"], "default": "deny" },
+  "roles": { "work": { "shellPolicy": { "allow": ["git *"] } } }
+}
+```
+
+Absent everywhere = everything runs. Per segment: `deny` glob → blocked, `allow` glob
+→ allowed, otherwise `default`. `default` is inferred when omitted — an `allow` list
+implies `deny` (fail closed), a bare `deny` list implies `allow` (fail open). The
+global `allow` is a ceiling no role can exceed and the stricter `default` wins. See
+[`extensions/shell-policy/README.md`](../shell-policy/README.md).
+
 `"tools": ["read", "grep"]` is shorthand for `{ "allow": [...] }`.
 Legacy `allowedTools` / `deniedTools` also accepted.
 Globs support `*` only.
@@ -49,6 +68,7 @@ Globs support `*` only.
 - Tool pool = tools active at session start, plus any tool registered later (MCP, dynamic). A role can never enable a tool you disabled globally.
 - Switching is refused while the agent is busy.
 - `skills` filters the `<available_skills>` block in the system prompt. It does **not** hide `/skill:<name>` slash commands — pi has no runtime API for that.
+- Command-level shell restrictions are a separate extension, `shell-policy`; this file supplies its config.
 - `promptMode: "replace"` drops pi's base prompt for that turn, including built-in tool guidelines.
 - Model failures (unknown model / missing API key) warn and keep the current model; everything else in the role still applies.
 

@@ -1,5 +1,10 @@
 {
   "active": "work",
+  "shellPolicy": {
+    "deny": [
+      "kubectl*"
+    ]
+  },
   "roles": {
     "work": {
       "description": "Senior dev. Write and test code",
@@ -152,6 +157,21 @@
       "skills": [
         "github"
       ],
+      "hidden": true
+    },
+    "humio": {
+      "description": "Humio + Snowflake log/query investigation",
+      "model": "vertex-anthropic/claude-haiku-5-5",
+      "promptMode": "replace",
+      "systemPromptFile": "prompts/humio.md",
+      "tools": {
+        "allow": [
+          "mcp__humio__search",
+          "mcp__humio__list_repos",
+          "mcp__snowflake__run_snowflake_query"
+        ]
+      },
+      "skills": [],
       "hidden": true
     },
     "retriever": {

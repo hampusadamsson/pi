@@ -7,7 +7,7 @@
  * Root modal (which-key style key grid):
  *   m        → model picker (MRU first, current model marked ●)
  *   r        → role picker (reads the roles extension config, dispatches /role)
- *   s        → session picker (resume a session)
+ *   s        → session picker (resume a session; g toggles all-projects view)
  *   S        → skill picker (reads /skill:* commands)
  *   n        → new session immediately
  *   c        → compact context immediately
@@ -68,7 +68,7 @@
  *   models      model picker
  *   roles       role picker (roles extension)
  *   skills      skill picker (dispatch /skill:<name>)
- *   sessions    session picker (resume, lists current project sessions)
+ *   sessions    session picker (resume; g/global toggles this project ↔ all projects)
  *   new         start a new session immediately
  *   compact     trigger compaction immediately
  *   reload      reload extensions/config immediately
@@ -1155,7 +1155,7 @@ type SelectionResult =
 interface Deps {
 	config: HotkeysConfig;
 	buildItems: (kind: ListKind) => SelectItem[];
-	loadSessions: () => Promise<SelectItem[]>;
+	loadSessions: (all: boolean) => Promise<SelectItem[]>;
 	refreshModels: () => Promise<void>;
 	actionByKey: (key: string) => ActionDef | undefined;
 }
@@ -1173,6 +1173,8 @@ class HotkeysModal implements Focusable {
 	private allItems: SelectItem[] = [];
 	private filteredCount = 0;
 	private modelProviders: string[] = [];
+	private globalSessions = false;
+	private sessionLoadId = 0;
 
 	constructor(
 		private theme: Theme,
@@ -1315,6 +1317,18 @@ class HotkeysModal implements Focusable {
 			return;
 		}
 		if (data === "g") {
+			if (this.kind === "sessions") {
+				// (g) global: toggle between this project's sessions and all sessions.
+				this.globalSessions = !this.globalSessions;
+				this.query = "";
+				this.filterMode = false;
+				this.filterIsProvider = false;
+				this.allItems = [{ value: "", label: "  loading…", description: undefined }];
+				this.list = this.newList(this.allItems);
+				this.applyFilter();
+				void this.loadSessionsAsync();
+				return;
+			}
 			if (this.pendingG) {
 				this.pendingG = false;
 				list.setSelectedIndex(0);
@@ -1349,6 +1363,7 @@ class HotkeysModal implements Focusable {
 		this.query = seedQuery;
 		this.filterMode = seedQuery.length > 0;
 		this.filterIsProvider = false;
+		if (kind === "sessions") this.globalSessions = false;
 
 		if (kind === "sessions") {
 			// Sessions load async; show a placeholder and swap in the real list.
@@ -1384,8 +1399,10 @@ class HotkeysModal implements Focusable {
 	}
 
 	private async loadSessionsAsync(): Promise<void> {
-		const items = await this.deps.loadSessions();
-		if (this.view !== "list" || this.kind !== "sessions") return;
+		const global = this.globalSessions;
+		const loadId = ++this.sessionLoadId;
+		const items = await this.deps.loadSessions(global);
+		if (this.view !== "list" || this.kind !== "sessions" || loadId !== this.sessionLoadId) return;
 		this.allItems = items;
 		this.list = this.newList(items);
 		this.applyFilter();
@@ -1513,7 +1530,7 @@ class HotkeysModal implements Focusable {
 			);
 			lines.push(row(""));
 		} else {
-			const title = this.kind === "models" ? "models" : this.kind === "roles" ? "roles" : this.kind === "skills" ? "skills" : this.kind === "sessions" ? "sessions" : this.kind === "copy" ? "copy" : "actions";
+			const title = this.kind === "models" ? "models" : this.kind === "roles" ? "roles" : this.kind === "skills" ? "skills" : this.kind === "sessions" ? (this.globalSessions ? "sessions · global" : "sessions · project") : this.kind === "copy" ? "copy" : "actions";
 			lines.push(row(` ${th.fg("accent", th.bold(title))}`));
 
 			// Filter row (always shown in list view so / state is visible)
@@ -1545,7 +1562,9 @@ class HotkeysModal implements Focusable {
 			lines.push(row(""));
 			lines.push(
 				row(
-					` ${th.fg("dim", "j/k nav · / filter · 1-9 provider · enter select · esc back")}`,
+					this.kind === "sessions"
+						? ` ${th.fg("dim", `j/k nav · / filter · g ${this.globalSessions ? "project only" : "all projects"} · enter select · esc back`)}`
+						: ` ${th.fg("dim", "j/k nav · / filter · 1-9 provider · enter select · esc back")}`,
 				),
 			);
 		}
@@ -1583,10 +1602,15 @@ export default function (pi: ExtensionAPI) {
 			refreshModels: async () => {
 				await ctx.modelRegistry.refresh({ allowNetwork: true, force: true, providers: ["bifrost"] });
 			},
-			loadSessions: async () => {
+			loadSessions: async (all) => {
 				const current = ctx.sessionManager.getSessionFile();
 				try {
-					const list = await SessionManager.list(ctx.cwd, ctx.sessionManager.getSessionDir());
+					// all=false → this project's sessions; all=true → every session
+					// (mirrors pi's SessionSelectorComponent: scanning getSessionDir()
+					// covers both the default global root and a custom session dir).
+					const list = all
+						? await SessionManager.listAll(ctx.sessionManager.getSessionDir())
+						: await SessionManager.list(ctx.cwd, ctx.sessionManager.getSessionDir());
 					return list
 						.sort((a, b) => b.modified.getTime() - a.modified.getTime())
 						.map((s) => ({

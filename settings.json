@@ -1,6 +1,6 @@
 {
-  "defaultModel": "claude-sonnet-5",
-  "defaultProvider": "anthropic-vertex",
+  "defaultModel": "claude-sonnet-5-5",
+  "defaultProvider": "vertex-anthropic",
   "lastChangelogVersion": "1.5.0",
   "packages": [
     "npm:pi-zentui",
@@ -9,7 +9,6 @@
     "npm:pi-sandbox",
     "git:github.com/kdejaeger/pi-scoped-models-extra-info",
     "npm:@vanillagreen/pi-session-manager",
-    "../../../../opt/homebrew/lib/node_modules/@jmfederico/pi-web/dist/pi-packages/relays",
     "npm:pi-web-access",
     "npm:@juicesharp/rpiv-todo"
   ],

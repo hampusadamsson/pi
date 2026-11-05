@@ -154,6 +154,10 @@ interface Run {
 	stderrTail: string;
 	/** Number of `wait` calls currently polling this run (suppresses the wake-up). */
 	waiters?: number;
+	/** Time of the last JSON event from the child (for idle detection). */
+	lastEventAt?: number;
+	/** Context size in tokens as of the last assistant message. */
+	contextTokens?: number;
 }
 
 let config = loadConfig();
@@ -298,6 +302,7 @@ function launchRun(run: Run): void {
 		} catch {
 			return;
 		}
+		run.lastEventAt = Date.now();
 		if (event.type === "message_end" && event.message) {
 			const msg = event.message as Message;
 			run.messages.push(msg);
@@ -305,6 +310,9 @@ function launchRun(run: Run): void {
 				run.usage.turns++;
 				const usage = (msg as any).usage;
 				if (usage) {
+					run.contextTokens =
+						usage.totalTokens ||
+						(usage.input || 0) + (usage.cacheRead || 0) + (usage.cacheWrite || 0) + (usage.output || 0);
 					run.usage.input += usage.input || 0;
 					run.usage.output += usage.output || 0;
 					run.usage.cost += usage.cost?.total || 0;
@@ -460,6 +468,42 @@ function describeRun(run: Run, includeOutput: boolean, tailLines: number): strin
 		}
 	}
 	return lines.join("\n");
+}
+
+// ---------------------------------------------------------------- command helpers
+
+const IDLE_AFTER_MS = 15_000;
+
+function statusLine(run: Run): string {
+	const parts = [run.id, run.role, run.state];
+	if (run.state === "running") {
+		const quiet = Date.now() - (run.lastEventAt ?? run.spawnedAt);
+		parts.push(quiet >= IDLE_AFTER_MS ? `idle ${Math.round(quiet / 1000)}s` : "active");
+	}
+	parts.push(`ctx ${run.contextTokens ? fmtTokens(run.contextTokens) : "-"}`);
+	parts.push(`${run.usage.turns} turns`);
+	return parts.join(" · ");
+}
+
+function messageText(msg: Message): string {
+	const content = (msg as any).content;
+	if (typeof content === "string") return content;
+	const out: string[] = [];
+	for (const part of content ?? []) {
+		if (part.type === "text") out.push(part.text);
+		else if (part.type === "toolCall") out.push(`[tool ${part.name} ${JSON.stringify(part.arguments ?? {}).slice(0, 200)}]`);
+		else if (part.type === "thinking") continue;
+	}
+	return out.join("\n").trim();
+}
+
+function lastMessages(run: Run, count = 5): string {
+	const tail = run.messages.slice(-count);
+	if (tail.length === 0) return `${run.id}: no messages yet.`;
+	const body = tail
+		.map((m) => `[${m.role}] ${messageText(m).slice(0, 2000) || "(empty)"}`)
+		.join("\n\n");
+	return `${statusLine(run)}\n\n${body}`;
 }
 
 // ---------------------------------------------------------------- tool
@@ -677,6 +721,40 @@ export default function (pi: ExtensionAPI) {
 		renderResult(result, _options, theme) {
 			const text = result.content[0]?.type === "text" ? result.content[0].text : "";
 			return new Text(theme.fg(result.isError ? "error" : "toolOutput", text), 0, 0);
+		},
+	});
+
+	// ------------------------------------------------------------- command
+
+	pi.registerCommand("subagents", {
+		description: "Subagents: status | <id> (last messages) | kill (stop all)",
+		getArgumentCompletions: (prefix) => {
+			const items = ["status", "kill", ...runs.keys()]
+				.filter((v) => v.startsWith(prefix))
+				.map((v) => ({ value: v, label: v }));
+			return items.length > 0 ? items : null;
+		},
+		handler: async (args, ctx) => {
+			currentCtx = ctx;
+			const arg = args.trim();
+			if (arg === "" || arg === "status") {
+				const all = [...runs.values()];
+				ctx.ui.notify(all.length ? all.map(statusLine).join("\n") : "No subagents.", "info");
+				return;
+			}
+			if (arg === "kill") {
+				const active = [...runs.values()].filter(isActive);
+				for (const run of active) killRun(run, "stopped");
+				updateStatus();
+				ctx.ui.notify(`Killed ${active.length} subagent${active.length === 1 ? "" : "s"}.`, "info");
+				return;
+			}
+			const run = runs.get(arg);
+			if (!run) {
+				ctx.ui.notify(`No subagent with id ${arg}. Try /subagents status.`, "warning");
+				return;
+			}
+			ctx.ui.notify(lastMessages(run), "info");
 		},
 	});
 

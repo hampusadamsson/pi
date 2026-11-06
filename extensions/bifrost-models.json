@@ -32,6 +32,10 @@
 		"reasoning": false
 	},
 	{
+		"id": "opencode-go/crouton-alpha-free",
+		"reasoning": false
+	},
+	{
 		"id": "opencode-go/deepseek-v4-pro",
 		"name": "Deepseek V4 Pro",
 		"cost": {
@@ -83,6 +87,10 @@
 	},
 	{
 		"id": "opencode-go/hy3",
+		"reasoning": false
+	},
+	{
+		"id": "opencode-go/hy4",
 		"reasoning": false
 	},
 	{

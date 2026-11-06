@@ -8,7 +8,7 @@
   "roles": {
     "work": {
       "description": "Senior dev. Write and test code",
-      "model": "vertex-anthropic/claude-sonnet-5-5",
+      "model": "bifrost/opencode-go/deepseek-v4.1-flash",
       "systemPrompt": "You are a developer. You are direct, efficient and brief.",
       "promptMode": "replace",
       "tools": {
@@ -30,7 +30,7 @@
     },
     "architect": {
       "description": "Delegator: plans and reviews, does all work through subagents",
-      "model": "vertex-anthropic/claude-sonnet-5-5",
+      "model": "bifrost/opencode-go/deepseek-v4.1-flash",
       "promptMode": "append",
       "systemPromptFile": "prompts/architect.md",
       "tools": {
@@ -51,7 +51,7 @@
     },
     "researcher": {
       "description": "Research assistant with access to all skills (Jira, Confluence, GitHub, Obsidian, Snowflake, Humio)",
-      "model": "vertex-anthropic/claude-sonnet-5-5",
+      "model": "bifrost/opencode-go/deepseek-v4.1-flash",
       "promptMode": "append",
       "systemPromptFile": "prompts/researcher.md",
       "tools": {
@@ -126,7 +126,7 @@
     },
     "ticketor": {
       "description": "kb ticket manager",
-      "model": "bifrost/qwen3.8-27b",
+      "model": "bifrost/opencode-go/deepseek-v4.1-flash",
       "promptMode": "replace",
       "systemPrompt": "You manage tickets with the kb cli. This is the only way to manage tickets.",
       "tools": {
@@ -140,7 +140,7 @@
     },
     "small": {
       "description": "Trivial mechanical tasks: small edits, commits, verification runs. Cheapest role.",
-      "model": "vertex-anthropic/claude-haiku-5-5",
+      "model": "bifrost/opencode-go/deepseek-v4.1-flash",
       "promptMode": "replace",
       "systemPrompt": "You are an agent working on a task. Your job is small, precise, mechanical edits and file operations. Follow the instructions exactly. Do not investigate, refactor or make judgement calls; if the task needs engineering judgement, say so instead of guessing.",
       "tools": {
@@ -161,7 +161,7 @@
     },
     "humio": {
       "description": "Humio + Snowflake log/query investigation",
-      "model": "vertex-anthropic/claude-haiku-5-5",
+      "model": "bifrost/opencode-go/deepseek-v4.1-flash",
       "promptMode": "replace",
       "systemPromptFile": "prompts/humio.md",
       "tools": {
@@ -176,7 +176,7 @@
     },
     "retriever": {
       "description": "Read-only information retrieval (Jira, Confluence, GitHub, Obsidian, Snowflake, Humio) on the cheapest model",
-      "model": "vertex-anthropic/claude-haiku-5-5",
+      "model": "bifrost/opencode-go/deepseek-v4.1-flash",
       "promptMode": "append",
       "systemPromptFile": "prompts/retriever.md",
       "tools": {
@@ -208,7 +208,7 @@
     },
     "jira-ro": {
       "description": "Read-only Jira",
-      "model": "vertex-anthropic/claude-haiku-5-5",
+      "model": "bifrost/opencode-go/deepseek-v4.1-flash",
       "promptMode": "replace",
       "systemPrompt": ".",
       "tools": {

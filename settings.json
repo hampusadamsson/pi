@@ -1,6 +1,6 @@
 {
-  "defaultModel": "claude-sonnet-5",
-  "defaultProvider": "anthropic-vertex",
+  "defaultModel": "claude-sonnet-5-5",
+  "defaultProvider": "vertex-anthropic",
   "lastChangelogVersion": "1.5.0",
   "packages": [
     "npm:pi-zentui",

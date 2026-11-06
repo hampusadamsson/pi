@@ -5,11 +5,11 @@
  * endpoint. Models are fetched from `/v1/models`; ids arrive as
  * `ollama/<model>` (Bifrost unified routing) and the prefix is stripped.
  *
- * Bifrost uses a self-signed cert (user-approved insecure). Pi's fetch
- * (undici, used by both discovery here and the OpenAI SDK for chat) only
- * trusts it with TLS verification off, so this extension sets
- * NODE_TLS_REJECT_UNAUTHORIZED=0 at load. Runtime-set works (verified);
- * NODE_EXTRA_CA_CERTS at runtime does not.
+ * TLS: Bifrost serves a self-signed cert. Rather than disabling verification
+ * process-wide (the old NODE_TLS_REJECT_UNAUTHORIZED=0 leaked into Vertex, MCP,
+ * web fetches and every child process), only the Bifrost certificate itself is
+ * pinned into Node's default CA store. Host and CA verification stay on for
+ * every host: nothing except a server presenting this exact cert is trusted.
  *
  * Do not return an empty list from refreshModels: an empty return wipes the
  * provider's models and hides the provider from /model entirely. Startup
@@ -19,11 +19,111 @@
 
 import { readFileSync, writeFileSync } from "node:fs";
 import { join, dirname } from "node:path";
-
-process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
+import tls from "node:tls";
 
 const BIFROST_BASE = (process.env.BIFROST_BASE ?? "https://bifrost.haadpi.duckdns.org:9443").replace(/\/+$/, "");
 const API_KEY = process.env.BIFROST_API_KEY ?? "sk-bf-1818b6aa-a7fc-4eb5-9804-8650be3b2f7b";
+
+// ------------------------------------------------------------- TLS trust pin
+
+const BIFROST_URL = new URL(BIFROST_BASE);
+const EXT_DIR = dirname(new URL(import.meta.url).pathname);
+const CA_PATH = process.env.BIFROST_CA_PATH ?? join(EXT_DIR, "bifrost-ca.pem");
+
+/** PEM body without armor/whitespace, so a re-pin can be deduped. */
+const pemBody = (pem: string) => pem.replace(/-----[^-]+-----/g, "").replace(/\s+/g, "");
+
+/** Add `pem` to the trusted roots, keeping the platform CA store intact. */
+function pinCert(pem: string): boolean {
+	try {
+		const store = tls.getCACertificates("default");
+		if (!store.some((c) => pemBody(c) === pemBody(pem))) {
+			tls.setDefaultCACertificates([...store, pem]);
+		}
+		return true;
+	} catch (err) {
+		console.warn(`[bifrost] could not pin TLS certificate: ${err instanceof Error ? err.message : String(err)}`);
+		return false;
+	}
+}
+
+/**
+ * Read the server leaf cert with verification off (one handshake) so it can be
+ * pinned. This is the same trust decision the old blanket rejectUnauthorized
+ * made, but scoped to this host and this one certificate.
+ */
+function fetchServerCert(): Promise<string> {
+	const host = BIFROST_URL.hostname;
+	const port = Number(BIFROST_URL.port || 443);
+	return new Promise((resolve, reject) => {
+		const socket = tls.connect(
+			// servername matters: without SNI Traefik answers with its own default
+			// cert, and the wrong certificate would get pinned.
+			{ host, port, servername: host, rejectUnauthorized: false },
+			() => {
+				const cert = socket.getPeerCertificate(false);
+				socket.end();
+				if (!cert?.raw) return reject(new Error("no peer certificate"));
+				const b64 = cert.raw.toString("base64").match(/.{1,64}/g)?.join("\n") ?? "";
+				resolve(`-----BEGIN CERTIFICATE-----\n${b64}\n-----END CERTIFICATE-----\n`);
+			},
+		);
+		socket.once("error", reject);
+	});
+}
+
+function isCertError(err: unknown): boolean {
+	const e = err as { code?: string; cause?: { code?: string } } | undefined;
+	const code = e?.code ?? e?.cause?.code ?? "";
+	return /CERT|SSL|TLS|SELF_SIGNED/i.test(code);
+}
+
+/** Re-pin from the live server; used when the cert rotated under us. */
+async function repinCert(): Promise<boolean> {
+	try {
+		const pem = await fetchServerCert();
+		if (!pinCert(pem)) return false;
+		try {
+			writeFileSync(CA_PATH, pem, { mode: 0o644 });
+		} catch {
+			// Cache write failure is harmless; next session re-fetches.
+		}
+		return true;
+	} catch {
+		return false;
+	}
+}
+
+/**
+ * The pinned copy on disk is trusted synchronously so the first request works;
+ * a live fetch then re-pins and refreshes the copy if the cert changed.
+ */
+function installBifrostTlsTrust(): void {
+	let cached: string | undefined;
+	try {
+		cached = readFileSync(CA_PATH, "utf8");
+	} catch {
+		cached = undefined;
+	}
+	if (cached) pinCert(cached);
+
+	fetchServerCert()
+		.then((pem) => {
+			if (!pinCert(pem)) return;
+			if (cached && pemBody(cached) === pemBody(pem)) return;
+			try {
+				writeFileSync(CA_PATH, pem, { mode: 0o644 });
+			} catch {
+				// Cache write failure is harmless; next session re-fetches.
+			}
+		})
+		.catch(() => {
+			// Offline or unreachable: keep whatever was pinned from disk.
+		});
+}
+
+installBifrostTlsTrust();
+
 // Upstream prefixes stripped from ids (bare ids keep existing selections/roles
 // working). Comma-separated; everything else keeps its `provider/` prefix.
 const STRIP_PREFIXES = (process.env.BIFROST_STRIP_PREFIXES ?? "ollama")
@@ -189,6 +289,8 @@ export default function (pi) {
 					liveInfo = await discover(context.signal);
 				} catch (err) {
 					if (context.signal.aborted) throw err;
+					// Cert rotated or never pinned: re-pin once, then retry.
+					if (isCertError(err) && (await repinCert())) continue;
 				}
 				if (liveInfo.length > 0) {
 					saveCache(liveInfo);

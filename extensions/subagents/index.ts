@@ -142,7 +142,14 @@ interface Run {
 	timeoutMs: number;
 	proc?: ChildProcess;
 	timeoutHandle?: ReturnType<typeof setTimeout>;
+	escalationHandle?: ReturnType<typeof setTimeout>;
 	queueHandle?: ReturnType<typeof setTimeout>;
+	/** True once the child process has exited (error/close); SIGKILL escalation is gated on this. */
+	exited?: boolean;
+	/** True once the run-end notification has woken the model; prevents duplicate wake-ups. */
+	notified?: boolean;
+	/** True once the run-end UI note has been shown; the model wake is tracked separately. */
+	endNotified?: boolean;
 	messages: Message[];
 	usage: Usage;
 	model?: string;
@@ -194,10 +201,14 @@ let currentCtx: ExtensionContext | undefined;
 let piApi: ExtensionAPI | undefined;
 
 function notifyRunEnded(run: Run): void {
-	const note = `Subagent ${run.role} ${run.state.replace("_", " ")} (${run.id})`;
-	if (currentCtx?.hasUI) {
-		currentCtx.ui.notify(note, run.state === "completed" ? "info" : "warning");
+	if (!run.endNotified) {
+		run.endNotified = true;
+		const note = `Subagent ${run.role} ${run.state.replace("_", " ")} (${run.id})`;
+		if (currentCtx?.hasUI) {
+			currentCtx.ui.notify(note, run.state === "completed" ? "info" : "warning");
+		}
 	}
+	// Always re-check the wake: a duplicate end event after stop must not skip it.
 	wakeModel(run);
 }
 
@@ -206,6 +217,7 @@ function wakeModel(run: Run): void {
 	if (!piApi) return;
 	if (run.state !== "completed" && run.state !== "failed" && run.state !== "timed_out") return;
 	if (run.waiters) return; // a wait call is already delivering the result
+	if (run.notified) return; // this run already woke the model once
 	const elapsed = Math.round(((run.endedAt ?? Date.now()) - run.spawnedAt) / 1000);
 	const hint =
 		run.state === "completed"
@@ -221,7 +233,9 @@ function wakeModel(run: Run): void {
 			{ customType: "subagents", content, display: true, details: { id: run.id, state: run.state } },
 			{ triggerTurn: true, deliverAs: "followUp" },
 		);
+		run.notified = true;
 	} catch (err) {
+		run.notified = false;
 		console.warn(`[subagents] wake-up failed: ${err instanceof Error ? err.message : String(err)}`);
 	}
 }
@@ -286,11 +300,22 @@ function launchRun(run: Run): void {
 	// Keep the exact launch line so a spawn failure is diagnosable from the tool
 	// result alone ("esm/resolve:241" with no command/cwd cost a long hunt once).
 	run.invocation = [invocation.command, ...invocation.args].join(" ");
-	const proc = spawn(invocation.command, invocation.args, {
-		cwd: run.cwd,
-		shell: false,
-		stdio: ["ignore", "pipe", "pipe"],
-	});
+	let proc: ChildProcess;
+	try {
+		proc = spawn(invocation.command, invocation.args, {
+			cwd: run.cwd,
+			shell: false,
+			stdio: ["ignore", "pipe", "pipe"],
+		});
+	} catch (err) {
+		run.state = "failed";
+		run.errorMessage = `spawn failed: ${err instanceof Error ? err.message : String(err)}`;
+		run.endedAt = Date.now();
+		clearTimeout(run.timeoutHandle);
+		markFinished(run);
+		notifyRunEnded(run);
+		return;
+	}
 	run.proc = proc;
 
 	let buffer = "";
@@ -340,7 +365,9 @@ function launchRun(run: Run): void {
 	});
 
 	proc.on("error", (err) => {
+		run.exited = true;
 		clearTimeout(run.timeoutHandle);
+		clearTimeout(run.escalationHandle);
 		run.state = "failed";
 		run.errorMessage = `spawn failed: ${err.message}`;
 		run.endedAt = Date.now();
@@ -349,6 +376,8 @@ function launchRun(run: Run): void {
 	});
 
 	proc.on("close", (code) => {
+		run.exited = true;
+		clearTimeout(run.escalationHandle);
 		if (buffer.trim()) processLine(buffer);
 		clearTimeout(run.timeoutHandle);
 		if (run.state === "running") {
@@ -364,6 +393,7 @@ function launchRun(run: Run): void {
 				run.errorMessage = run.stderrTail.trim() || `exited with code ${code}, no stderr`;
 			}
 		}
+		run.proc = undefined;
 		markFinished(run);
 		notifyRunEnded(run);
 	});
@@ -376,8 +406,9 @@ function killRun(run: Run, state: "timed_out" | "stopped"): void {
 	clearTimeout(run.queueHandle);
 	if (run.proc?.pid && !run.proc.killed) {
 		run.proc.kill("SIGTERM");
-		setTimeout(() => {
-			if (run.proc?.pid && !run.proc.killed) run.proc.kill("SIGKILL");
+		// `proc.killed` flips as soon as a signal is *sent*, so gate on real exit.
+		run.escalationHandle = setTimeout(() => {
+			if (!run.exited && run.proc) run.proc.kill("SIGKILL");
 		}, 5000);
 	}
 	if (!isActive(run)) return;
@@ -537,27 +568,48 @@ const SubagentToolParams = Type.Object({
 });
 
 /** Poll until the run is terminal or the deadline passes; returns the run. */
-async function waitPoll(id: string | undefined, deadlineMs: number): Promise<Run | undefined> {
+async function waitPoll(id: string | undefined, deadlineMs: number, signal?: AbortSignal): Promise<Run | undefined> {
 	const started = Date.now();
 	return new Promise((resolve) => {
 		let held: Run | undefined; // run flagged as being waited on
+		let pollHandle: ReturnType<typeof setTimeout> | undefined;
+		let settled = false;
 		const done = (r: Run | undefined) => {
-			if (held) held.waiters = (held.waiters ?? 1) - 1;
+			if (settled) return;
+			settled = true;
+			clearTimeout(pollHandle);
+			signal?.removeEventListener("abort", onAbort);
+			let pending: Run | undefined;
+			if (held) {
+				held.waiters = Math.max(0, (held.waiters ?? 1) - 1);
+				// Last waiter left WITHOUT delivering the result: the model still needs the wake.
+				if (held.waiters === 0 && !isActive(held) && !held.notified && held !== r) pending = held;
+			}
 			resolve(r);
+			if (pending) queueMicrotask(() => wakeModel(pending));
 		};
+		const onAbort = () => done(undefined);
 		const tick = () => {
-			const candidates = id ? [runs.get(id)] : [...runs.values()];
-			const target = candidates.find((r) => r !== undefined);
+			let target: Run | undefined;
+			if (id) {
+				target = runs.get(id);
+			} else {
+				if (runs.size === 0) return done(undefined);
+				const byNewest = [...runs.values()].sort((a, b) => b.spawnedAt - a.spawnedAt);
+				// Newest active run wins; a finished run is never picked implicitly.
+				target = byNewest.find(isActive);
+			}
 			if (!target) return done(undefined);
-			if (id && target.id !== id) return done(undefined);
 			if (!held) {
 				held = target;
 				target.waiters = (target.waiters ?? 0) + 1;
 			}
 			if (!isActive(target)) return done(target);
 			if (Date.now() - started >= deadlineMs) return done(target);
-			setTimeout(tick, 500);
+			pollHandle = setTimeout(tick, 500);
 		};
+		signal?.addEventListener("abort", onAbort, { once: true });
+		if (signal?.aborted) return done(undefined);
 		tick();
 	});
 }
@@ -662,8 +714,14 @@ export default function (pi: ExtensionAPI) {
 
 				case "wait": {
 					const deadlineMs = (params.timeoutSeconds ?? 30) * 1000;
-					const run = await waitPoll(params.id, deadlineMs);
-					if (!run || (params.id && run.id !== params.id)) {
+					const run = await waitPoll(params.id, deadlineMs, _signal);
+					if (_signal?.aborted && !run) {
+						return toolText(`wait aborted; run may still be running`, {
+							action: "wait",
+							id: run?.id ?? params.id,
+						});
+					}
+					if (!run) {
 						return toolText(
 							`wait: no run found${params.id ? ` for id ${params.id}` : ""}. Use list.`,
 							{ action: "wait", id: params.id },
@@ -719,7 +777,8 @@ export default function (pi: ExtensionAPI) {
 		},
 
 		renderResult(result, _options, theme) {
-			const text = result.content[0]?.type === "text" ? result.content[0].text : "";
+			const block = result.content?.[0];
+			const text = block?.type === "text" ? block.text : "";
 			return new Text(theme.fg(result.isError ? "error" : "toolOutput", text), 0, 0);
 		},
 	});
@@ -779,7 +838,9 @@ export default function (pi: ExtensionAPI) {
 	pi.on("before_agent_start", (event) => {
 		const active = [...runs.values()].filter(isActive).slice(0, 10);
 		if (active.length === 0) return;
-		const lines = active.map((r) => `- ${r.id} ${r.role} (state: ${r.state})`);
+		const lines = active.map(
+			(r) => `- ${r.id} ${r.role} (state: ${r.state === "queued" ? "queued (waiting for a free slot)" : r.state})`,
+		);
 		const section = `\n\n# Active subagents\nBackground work launched earlier is still running. Do not re-spawn these tasks.\n${lines.join("\n")}\nUse subagent status/list/wait to check or collect results.`;
 		return { systemPrompt: event.systemPrompt + section };
 	});

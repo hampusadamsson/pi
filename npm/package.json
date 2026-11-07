@@ -6,8 +6,7 @@
     "@juicesharp/rpiv-todo": "^2.15.0",
     "@vanillagreen/pi-session-manager": "^2.0.4",
     "pi-profiles": "^0.1.1",
-    "pi-sandbox": "^0.7.3",
-    "pi-web-access": "^0.46.0",
+    "pi-sandbox": "^0.8.0",
     "pi-zentui": "^0.34.0"
   }
 }

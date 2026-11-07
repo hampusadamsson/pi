@@ -1,5 +1,6 @@
 {
   "timeoutSeconds": 600,
+  "idleTimeoutSeconds": 300,
   "roleTimeouts": {
     "researcher": 900,
     "work": 900,

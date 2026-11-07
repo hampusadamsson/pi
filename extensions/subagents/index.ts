@@ -5,7 +5,10 @@
  * runs, managed through the `subagents` tool (spawn/status/list/wait/stop).
  * Non-blocking: spawn returns a run id immediately. On timeout the child is
  * killed (SIGTERM, then SIGKILL after 5s) and the run is marked timed_out with
- * its partial transcript.
+ * its partial transcript. A run that produces no output at all for
+ * `idleTimeoutSeconds` is also killed early (state: stalled) — a hung child
+ * (stuck MCP connect, wedged tool call, dead provider stream) never reaches the
+ * absolute deadline otherwise.
  *
  * Agents are pi roles (roles.json / roles/*.json): a subagent inherits the
  * role's model, tools, skills, system prompt and MCP access. MCP servers
@@ -14,16 +17,28 @@
  * Config: ~/.pi/agent/subagents.json
  *   {
  *     "timeoutSeconds": 600,           // default run deadline
+ *     "idleTimeoutSeconds": 300,       // kill a run with no output for this long; 0 disables
  *     "roleTimeouts": { "researcher": 900 },
  *     "maxConcurrent": 4,              // extra spawns queue until a slot frees
  *     "outputCapKb": 50,               // final output cap returned to the model
  *     "piBin": "/opt/homebrew/bin/pi" // optional: explicit pi CLI to spawn
  *   }
  *
+ * `idleTimeoutSeconds` (default 300) is a watchdog on total silence: any stdout
+ * or stderr chunk resets the timer. A run quiet for that long is killed
+ * (SIGTERM, then SIGKILL) and marked stalled. Silence alone is not proof of a
+ * hang: between `tool_execution_start` and `tool_execution_end` the child emits
+ * no bytes at all for a legitimate reason (a 10-minute file review, a slow
+ * shell command), so the watchdog is skipped entirely while a tool is in
+ * flight — a slow tool cannot be distinguished from a wedged one, and the
+ * absolute `timeoutSeconds` / role deadline already bounds that case. Set it
+ * to 0 (or a negative value) to disable the watchdog and keep only the
+ * absolute `timeoutSeconds` deadline.
+ *
  * While background runs are active, an "Active subagents" section is appended
  * to the system prompt (composed with other extensions' prompt edits) and the
  * footer shows the active count. Ended runs notify the user, and completed/
- * failed/timed_out runs also wake the model (custom message, followUp +
+ * failed/timed_out/stalled runs also wake the model (custom message, followUp +
  * triggerTurn) so it can collect or retry — unless a `wait` is already
  * blocking on that run. Stopped runs never wake the model.
  * Tool name: `subagents` (plural) to match the roles.json tool allowlists.
@@ -43,6 +58,8 @@ import { Text } from "@earendil-works/pi-tui";
 
 interface SubagentsConfig {
 	timeoutSeconds: number;
+	/** Kill a run that produced no output for this many seconds; 0 (or negative) disables. */
+	idleTimeoutSeconds: number;
 	roleTimeouts: Record<string, number>;
 	maxConcurrent: number;
 	outputCapKb: number;
@@ -51,6 +68,7 @@ interface SubagentsConfig {
 
 const DEFAULT_CONFIG: SubagentsConfig = {
 	timeoutSeconds: 600,
+	idleTimeoutSeconds: 300,
 	roleTimeouts: {},
 	maxConcurrent: 4,
 	outputCapKb: 50,
@@ -63,6 +81,7 @@ function loadConfig(): SubagentsConfig {
 		const raw = JSON.parse(readFileSync(path, "utf8")) as Partial<SubagentsConfig>;
 		return {
 			timeoutSeconds: raw.timeoutSeconds ?? DEFAULT_CONFIG.timeoutSeconds,
+			idleTimeoutSeconds: raw.idleTimeoutSeconds ?? DEFAULT_CONFIG.idleTimeoutSeconds,
 			roleTimeouts: raw.roleTimeouts ?? {},
 			maxConcurrent: raw.maxConcurrent ?? DEFAULT_CONFIG.maxConcurrent,
 			outputCapKb: raw.outputCapKb ?? DEFAULT_CONFIG.outputCapKb,
@@ -122,7 +141,7 @@ function roleModel(role: string): string | undefined {
 
 // ---------------------------------------------------------------- state
 
-type RunState = "queued" | "running" | "completed" | "failed" | "timed_out" | "stopped";
+type RunState = "queued" | "running" | "completed" | "failed" | "timed_out" | "stopped" | "stalled";
 
 interface Usage {
 	input: number;
@@ -161,8 +180,12 @@ interface Run {
 	stderrTail: string;
 	/** Number of `wait` calls currently polling this run (suppresses the wake-up). */
 	waiters?: number;
-	/** Time of the last JSON event from the child (for idle detection). */
+	/** Time of the last byte of any output or event from the child (for idle detection). */
 	lastEventAt?: number;
+	/** Name of the tool currently executing in the child, if any (watchdog is skipped while set). */
+	activeTool?: string;
+	/** When `activeTool` started, for diagnostics. */
+	activeToolAt?: number;
 	/** Context size in tokens as of the last assistant message. */
 	contextTokens?: number;
 }
@@ -171,6 +194,49 @@ let config = loadConfig();
 const runs = new Map<string, Run>();
 const finishedOrder: string[] = [];
 const FINISHED_KEPT = 20;
+
+// ---------------------------------------------------------------- idle watchdog
+
+let watchdogHandle: ReturnType<typeof setInterval> | undefined;
+
+/** Start the idle watchdog once; no-op when disabled or already running. */
+function startWatchdog(): void {
+	if (config.idleTimeoutSeconds <= 0) return;
+	if (watchdogHandle) return;
+	const tickMs = Math.max(1000, Math.min(5000, (config.idleTimeoutSeconds * 1000) / 2));
+	watchdogHandle = setInterval(checkIdleRuns, tickMs);
+	watchdogHandle.unref?.();
+}
+
+function stopWatchdog(): void {
+	if (!watchdogHandle) return;
+	clearInterval(watchdogHandle);
+	watchdogHandle = undefined;
+}
+
+/** Kill runs that have produced no output for `idleTimeoutSeconds`; skipped while a tool runs. */
+function checkIdleRuns(): void {
+	// Disabled: idleMs would be 0, `quiet >= 0` is always true, and this would kill
+	// every running subagent on the first tick.
+	if (config.idleTimeoutSeconds <= 0) {
+		stopWatchdog();
+		return;
+	}
+	const baseIdleMs = config.idleTimeoutSeconds * 1000;
+	for (const run of runs.values()) {
+		if (run.state !== "running") continue;
+		// A tool call in flight legitimately emits nothing until it ends, and we cannot
+		// tell a slow tool from a wedged one. The absolute timeoutMs deadline already
+		// bounds that case, so the watchdog only judges runs between tool calls.
+		if (run.activeTool) continue;
+		const idleMs = baseIdleMs;
+		const quiet = Date.now() - (run.lastEventAt ?? run.spawnedAt);
+		if (quiet >= idleMs) {
+			run.errorMessage = `no output for ${Math.round(quiet / 1000)}s (idle watchdog; role ${run.role})`;
+			killRun(run, "stalled");
+		}
+	}
+}
 
 let newRunCounter = 0;
 function newRunId(): string {
@@ -215,14 +281,25 @@ function notifyRunEnded(run: Run): void {
 /** Inject a short custom message so the model can collect/retry; queued if mid-turn. */
 function wakeModel(run: Run): void {
 	if (!piApi) return;
-	if (run.state !== "completed" && run.state !== "failed" && run.state !== "timed_out") return;
+	if (
+		run.state !== "completed" &&
+		run.state !== "failed" &&
+		run.state !== "timed_out" &&
+		run.state !== "stalled"
+	)
+		return;
 	if (run.waiters) return; // a wait call is already delivering the result
 	if (run.notified) return; // this run already woke the model once
 	const elapsed = Math.round(((run.endedAt ?? Date.now()) - run.spawnedAt) / 1000);
+	const quietSeconds = Math.round(
+		((run.endedAt ?? Date.now()) - (run.lastEventAt ?? run.spawnedAt)) / 1000,
+	);
 	const hint =
 		run.state === "completed"
 			? `Collect the result with subagents wait/status id "${run.id}".`
-			: `You may retry (larger timeoutSeconds or a smaller split task). Fetch the partial output with subagents status/wait id "${run.id}".`;
+			: run.state === "stalled"
+				? `${run.errorMessage ?? `Run stalled (no output for ${quietSeconds}s) — it was killed.`} Retry with a smaller/split task or a larger timeoutSeconds. Fetch the partial output with subagents status/wait id "${run.id}".`
+				: `You may retry (larger timeoutSeconds or a smaller split task). Fetch the partial output with subagents status/wait id "${run.id}".`;
 	const content = [
 		`Subagent run ${run.id} (${run.role}) ${run.state} after ${elapsed}s.`,
 		`task: ${run.task.slice(0, 200)}`,
@@ -317,6 +394,7 @@ function launchRun(run: Run): void {
 		return;
 	}
 	run.proc = proc;
+	startWatchdog();
 
 	let buffer = "";
 	const processLine = (line: string) => {
@@ -328,6 +406,12 @@ function launchRun(run: Run): void {
 			return;
 		}
 		run.lastEventAt = Date.now();
+		if (event.type === "tool_execution_start") {
+			run.activeTool = typeof event.toolName === "string" ? event.toolName : "unknown";
+			run.activeToolAt = Date.now();
+		} else if (event.type === "tool_execution_end") {
+			run.activeTool = undefined;
+		}
 		if (event.type === "message_end" && event.message) {
 			const msg = event.message as Message;
 			run.messages.push(msg);
@@ -350,12 +434,14 @@ function launchRun(run: Run): void {
 	};
 
 	proc.stdout!.on("data", (data) => {
+		run.lastEventAt = Date.now();
 		buffer += data.toString();
 		const lines = buffer.split("\n");
 		buffer = lines.pop() ?? "";
 		for (const line of lines) processLine(line);
 	});
 	proc.stderr!.on("data", (data) => {
+		run.lastEventAt = Date.now();
 		const text = data.toString();
 		// Keep the newest stderr instead of locking on the first chunk: node prints a
 		// bare `node:internal/modules/esm/resolve:241` header before the actual
@@ -368,9 +454,12 @@ function launchRun(run: Run): void {
 		run.exited = true;
 		clearTimeout(run.timeoutHandle);
 		clearTimeout(run.escalationHandle);
-		run.state = "failed";
-		run.errorMessage = `spawn failed: ${err.message}`;
-		run.endedAt = Date.now();
+		// Do not clobber a verdict the watchdog or stop already reached.
+		if (run.state === "running") {
+			run.state = "failed";
+			run.errorMessage = `spawn failed: ${err.message}`;
+			run.endedAt = Date.now();
+		}
 		markFinished(run);
 		notifyRunEnded(run);
 	});
@@ -401,12 +490,14 @@ function launchRun(run: Run): void {
 	run.timeoutHandle = setTimeout(() => killRun(run, "timed_out"), run.timeoutMs);
 }
 
-function killRun(run: Run, state: "timed_out" | "stopped"): void {
+function killRun(run: Run, state: "timed_out" | "stopped" | "stalled"): void {
 	clearTimeout(run.timeoutHandle);
+	clearTimeout(run.escalationHandle);
 	clearTimeout(run.queueHandle);
-	if (run.proc?.pid && !run.proc.killed) {
+	// `proc.killed` flips as soon as a signal is *sent*, so gate on real exit and
+	// always re-arm the escalation timer — a stale one must never block the SIGKILL.
+	if (run.proc && !run.exited) {
 		run.proc.kill("SIGTERM");
-		// `proc.killed` flips as soon as a signal is *sent*, so gate on real exit.
 		run.escalationHandle = setTimeout(() => {
 			if (!run.exited && run.proc) run.proc.kill("SIGKILL");
 		}, 5000);
@@ -830,6 +921,7 @@ export default function (pi: ExtensionAPI) {
 		for (const run of runs.values()) {
 			if (isActive(run)) killRun(run, "stopped");
 		}
+		stopWatchdog();
 	});
 
 	// Append active runs to the system prompt, composing with other

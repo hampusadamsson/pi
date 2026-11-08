@@ -1,14 +1,27 @@
 /**
  * Subagents extension — background role-based delegation.
  *
- * Spawns child `pi --mode json --role <role> "<task>"` processes as background
- * runs, managed through the `subagents` tool (spawn/status/list/wait/stop).
- * Non-blocking: spawn returns a run id immediately. On timeout the child is
+ * Spawns child `pi --mode rpc --role <role>` processes (task sent over stdin)
+ * as background runs, managed through the `subagents` tool
+ * (spawn/status/list/wait/stop). Non-blocking: spawn returns a run id immediately. On timeout the child is
  * killed (SIGTERM, then SIGKILL after 5s) and the run is marked timed_out with
  * its partial transcript. A run that produces no output at all for
  * `idleTimeoutSeconds` is also killed early (state: stalled) — a hung child
  * (stuck MCP connect, wedged tool call, dead provider stream) never reaches the
- * absolute deadline otherwise.
+ * absolute deadline otherwise. A deadline alone does not bound cost: hundreds of
+ * cheap turns fit inside one wall-clock budget, so rpc runs are also capped by
+ * turn count (`maxTurns` / `roleMaxTurns`), steered to wrap up before the cap and
+ * killed with state turn_limited at it.
+ *
+ * Turn cap (rpc only): each child `turn_end` event increments the run's own turn
+ * counter (separate from `usage.turns`, which counts assistant messages). At
+ * `cap - 2` turns, for caps of 3 or more, the child is sent one `steer` command
+ * telling it to wrap up (smaller caps get no steer — there is no room before the
+ * kill); at `cap` turns it is killed (state: turn_limited) with the partial transcript. The
+ * cap is `roleMaxTurns[role] ?? maxTurns`, and `0` means unlimited (backwards
+ * compatible default). `mode: "json"` ignores the cap entirely — json children
+ * are single-shot, with the run bounded only by its deadline (and the idle
+ * watchdog).
  *
  * Agents are pi roles (roles.json / roles/*.json): a subagent inherits the
  * role's model, tools, skills, system prompt and MCP access. MCP servers
@@ -20,9 +33,31 @@
  *     "idleTimeoutSeconds": 300,       // kill a run with no output for this long; 0 disables
  *     "roleTimeouts": { "researcher": 900 },
  *     "maxConcurrent": 4,              // extra spawns queue until a slot frees
+ *     "maxDepth": 1,                  // max nesting depth; 1 = a subagent may not spawn subagents
+ *                                     // (0 = the top-level agent may not spawn at all). Tracked via
+ *                                     // PI_SUBAGENT_DEPTH, which children inherit +1.
+ *     "maxTurns": 40,                  // rpc only: kill a run after this many child turns
+ *                                     // (0 = unlimited, the default). One steer to wrap up is
+ *                                     // sent at maxTurns-2 turns, for caps of 3 or more.
+ *                                     // Ignored in "json" mode.
+ *     "roleMaxTurns": { "researcher": 60 },  // per-role override of maxTurns (0 = unlimited)
  *     "outputCapKb": 50,               // final output cap returned to the model
+ *     "mode": "rpc",                  // child transport: "rpc" (JSONL over stdin+stdout, default)
+ *                                      // or "json" (legacy: task as trailing arg, stdout-only)
  *     "piBin": "/opt/homebrew/bin/pi" // optional: explicit pi CLI to spawn
  *   }
+ *
+ * Transport: children run `pi --mode rpc --no-session --role <role>`; the task is
+ * written as a single `{"id":"1","type":"prompt","message":<task>}` line to
+ * the child's stdin. stdout is parsed line-by-line: `message_end` supplies the
+ * transcript, `response` with `success:false` supplies an error, and
+ * `extension_ui_request` dialogs (select/confirm/input/editor) are always
+ * answered with `{"type":"extension_ui_response","id":...,"cancelled":true}`
+ * so a child can never block waiting for a human. `agent_settled` is the
+ * completion signal (the child is then shut down by closing its stdin); the
+ * `close` handler stays as the fallback that finalises state. `mode: "json"`
+ * keeps the old behaviour exactly: task as the trailing `--` argument,
+ * stdout-only events, exit code decides the outcome.
  *
  * `idleTimeoutSeconds` (default 300) is a watchdog on total silence: any stdout
  * or stderr chunk resets the timer. A run quiet for that long is killed
@@ -35,10 +70,13 @@
  * to 0 (or a negative value) to disable the watchdog and keep only the
  * absolute `timeoutSeconds` deadline.
  *
- * While background runs are active, an "Active subagents" section is appended
- * to the system prompt (composed with other extensions' prompt edits) and the
- * footer shows the active count. Ended runs notify the user, and completed/
- * failed/timed_out/stalled runs also wake the model (custom message, followUp +
+ * Every run contributes a `subagents` system-prompt *section* (the `sections` map
+ * on `systemPromptOptions`, diffed and persisted as a patch — never a
+ * `systemPrompt` override, which would reproject the whole prompt and break the
+ * prompt cache). The section names the active runs, or says "none" when nothing
+ * is running, so the section set stays stable across turns. The footer shows the
+ * active count. Ended runs notify the user, and completed/
+ * failed/timed_out/stalled/turn_limited runs also wake the model (custom message, followUp +
  * triggerTurn) so it can collect or retry — unless a `wait` is already
  * blocking on that run. Stopped runs never wake the model.
  * Tool name: `subagents` (plural) to match the roles.json tool allowlists.
@@ -46,12 +84,16 @@
 
 import { spawn, type ChildProcess } from "node:child_process";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
-import { homedir } from "node:os";
 import { join } from "node:path";
 import type { AgentToolResult } from "@earendil-works/pi-agent-core";
 import { StringEnum, type Message } from "@earendil-works/pi-ai";
 import { Type } from "typebox";
-import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
+import {
+	CONFIG_DIR_NAME,
+	getAgentDir,
+	type ExtensionAPI,
+	type ExtensionContext,
+} from "@earendil-works/pi-coding-agent";
 import { Text } from "@earendil-works/pi-tui";
 
 // ---------------------------------------------------------------- config
@@ -61,8 +103,16 @@ interface SubagentsConfig {
 	/** Kill a run that produced no output for this many seconds; 0 (or negative) disables. */
 	idleTimeoutSeconds: number;
 	roleTimeouts: Record<string, number>;
+	/** rpc only: max child turns per run; 0 (default) = unlimited. */
+	maxTurns: number;
+	/** Per-role override of `maxTurns`; 0 = unlimited. */
+	roleMaxTurns: Record<string, number>;
 	maxConcurrent: number;
+	/** Max subagent nesting depth; 1 (default) = a subagent may not spawn further subagents. */
+	maxDepth: number;
 	outputCapKb: number;
+	/** Child transport: "rpc" (JSONL over stdin+stdout, default) or "json" (legacy trailing-arg). */
+	mode: "rpc" | "json";
 	piBin?: string;
 }
 
@@ -70,12 +120,16 @@ const DEFAULT_CONFIG: SubagentsConfig = {
 	timeoutSeconds: 600,
 	idleTimeoutSeconds: 300,
 	roleTimeouts: {},
+	maxTurns: 0,
+	roleMaxTurns: {},
 	maxConcurrent: 4,
+	maxDepth: 1,
 	outputCapKb: 50,
+	mode: "rpc",
 };
 
 function loadConfig(): SubagentsConfig {
-	const path = join(homedir(), ".pi", "agent", "subagents.json");
+	const path = join(getAgentDir(), "subagents.json");
 	if (!existsSync(path)) return { ...DEFAULT_CONFIG };
 	try {
 		const raw = JSON.parse(readFileSync(path, "utf8")) as Partial<SubagentsConfig>;
@@ -83,8 +137,18 @@ function loadConfig(): SubagentsConfig {
 			timeoutSeconds: raw.timeoutSeconds ?? DEFAULT_CONFIG.timeoutSeconds,
 			idleTimeoutSeconds: raw.idleTimeoutSeconds ?? DEFAULT_CONFIG.idleTimeoutSeconds,
 			roleTimeouts: raw.roleTimeouts ?? {},
+			maxTurns:
+				typeof raw.maxTurns === "number" && Number.isFinite(raw.maxTurns) && raw.maxTurns > 0
+					? Math.floor(raw.maxTurns)
+					: 0,
+			roleMaxTurns: raw.roleMaxTurns ?? {},
 			maxConcurrent: raw.maxConcurrent ?? DEFAULT_CONFIG.maxConcurrent,
-			outputCapKb: raw.outputCapKb ?? DEFAULT_CONFIG.outputCapKb,
+			maxDepth: typeof raw.maxDepth === "number" && Number.isFinite(raw.maxDepth) ? raw.maxDepth : DEFAULT_CONFIG.maxDepth,
+			outputCapKb:
+				typeof raw.outputCapKb === "number" && Number.isFinite(raw.outputCapKb) && raw.outputCapKb > 0
+					? raw.outputCapKb
+					: DEFAULT_CONFIG.outputCapKb,
+			mode: raw.mode === "json" ? "json" : "rpc",
 			...(typeof raw.piBin === "string" && raw.piBin.trim() ? { piBin: raw.piBin.trim() } : {}),
 		};
 	} catch {
@@ -92,56 +156,102 @@ function loadConfig(): SubagentsConfig {
 	}
 }
 
-/** Role names from the same sources the roles extension reads. */
-function discoverRoles(): string[] {
-	const roles = new Set<string>();
-	const agentDir = join(homedir(), ".pi", "agent");
+/** Session cwd, captured at session_start — project roles are only discoverable with it. */
+let projectCwd: string | undefined;
+/** Whether the current project is trusted (project-local roles are only read when it is). */
+let projectTrusted = false;
 
-	try {
-		const file = JSON.parse(readFileSync(join(agentDir, "roles.json"), "utf8")) as {
-			roles?: Record<string, unknown>;
-		};
-		for (const name of Object.keys(file.roles ?? {})) roles.add(name);
-	} catch {
-		/* missing or invalid — ignore */
-	}
+/**
+ * Merged role config, in the same order the roles extension merges it (later wins
+ * per role): global roles.json -> global roles/*.json -> project roles.json ->
+ * project roles/*.json. Project sources are skipped when the cwd is unknown or
+ * the project is untrusted. Malformed files are ignored.
+ *
+ * Memoized: the merge is pure fs reading, is consulted several times per spawn
+ * (`discoverRoles`, `roleModel`, `roleExcludesMcp`, turn cap) and once per
+ * `renderCall`, so re-reading every role file on each call would put synchronous
+ * fs I/O in the render path. The cache is keyed on the inputs that can change
+ * the result and is invalidated on `session_start`.
+ */
+let roleConfigCacheKey: string | undefined;
+let roleConfigCache: Record<string, any> | undefined;
 
-	const rolesDir = join(agentDir, "roles");
-	if (existsSync(rolesDir)) {
-		for (const f of readdirSync(rolesDir)) {
-			if (f.endsWith(".json") && f !== "roles.json") roles.add(f.slice(0, -5));
+function loadRoleConfig(): Record<string, any> {
+	const agentDir = getAgentDir();
+	// Cache key: the consulted sources are determined by these three values only.
+	const key = `${agentDir}|${projectCwd ?? ""}|${projectTrusted}`;
+	if (roleConfigCache && roleConfigCacheKey === key) return roleConfigCache;
+
+	const roles: Record<string, any> = {};
+
+	const mergeFile = (path: string): void => {
+		try {
+			const file = JSON.parse(readFileSync(path, "utf8")) as { roles?: Record<string, any> };
+			for (const [name, role] of Object.entries(file?.roles ?? {})) {
+				if (!role || typeof role !== "object") continue;
+				roles[name] = { ...roles[name], ...role };
+			}
+		} catch {
+			/* missing or invalid — ignore */
 		}
+	};
+
+	const mergeDir = (dir: string): void => {
+		let files: string[];
+		try {
+			if (!existsSync(dir)) return;
+			files = readdirSync(dir).filter((f) => f.endsWith(".json") && f !== "roles.json");
+		} catch {
+			return;
+		}
+		for (const f of files.sort()) {
+			try {
+				const raw = JSON.parse(readFileSync(join(dir, f), "utf8"));
+				if (!raw || typeof raw !== "object") continue;
+				const name = f.slice(0, -".json".length);
+				roles[name] = { ...roles[name], ...(raw as Record<string, any>) };
+			} catch {
+				/* missing or invalid — ignore */
+			}
+		}
+	};
+
+	mergeFile(join(agentDir, "roles.json"));
+	mergeDir(join(agentDir, "roles"));
+
+	if (projectTrusted && projectCwd) {
+		const projectDir = join(projectCwd, CONFIG_DIR_NAME);
+		mergeFile(join(projectDir, "roles.json"));
+		mergeDir(join(projectDir, "roles"));
 	}
 
-	return [...roles].sort();
+	roleConfigCacheKey = key;
+	roleConfigCache = roles;
+	return roles;
 }
 
-/** Model configured for a role (roles.json or roles/<name>.json), if any. */
+/** Role names from the same sources the roles extension reads. */
+function discoverRoles(): string[] {
+	return Object.keys(loadRoleConfig()).sort();
+}
+
+/** Model configured for a role, if any. */
 function roleModel(role: string): string | undefined {
-	const agentDir = join(homedir(), ".pi", "agent");
-	const pick = (v: unknown): string | undefined => {
-		const m = (v as { model?: unknown } | undefined)?.model;
-		return typeof m === "string" && m ? m : undefined;
-	};
-	try {
-		const file = JSON.parse(readFileSync(join(agentDir, "roles.json"), "utf8")) as {
-			roles?: Record<string, unknown>;
-		};
-		const m = pick(file.roles?.[role]);
-		if (m) return m;
-	} catch {
-		/* ignore */
-	}
-	try {
-		return pick(JSON.parse(readFileSync(join(agentDir, "roles", `${role}.json`), "utf8")));
-	} catch {
-		return undefined;
-	}
+	const m = loadRoleConfig()[role]?.model;
+	return typeof m === "string" && m ? m : undefined;
 }
 
 // ---------------------------------------------------------------- state
 
-type RunState = "queued" | "running" | "completed" | "failed" | "timed_out" | "stopped" | "stalled";
+type RunState =
+	| "queued"
+	| "running"
+	| "completed"
+	| "failed"
+	| "timed_out"
+	| "stopped"
+	| "stalled"
+	| "turn_limited";
 
 interface Usage {
 	input: number;
@@ -188,12 +298,20 @@ interface Run {
 	activeToolAt?: number;
 	/** Context size in tokens as of the last assistant message. */
 	contextTokens?: number;
+	/** Child `turn_end` events seen so far (the turn cap counter; not `usage.turns`). */
+	turns?: number;
+	/** True once the wrap-up steer has been written; the steer is sent once per run. */
+	wrapUpSent?: boolean;
+	/** Effective turn cap for this run (0 = unlimited); rpc transport only. */
+	maxTurns?: number;
 }
 
 let config = loadConfig();
 const runs = new Map<string, Run>();
 const finishedOrder: string[] = [];
-const FINISHED_KEPT = 20;
+// Kept well above maxConcurrent (15 in practice): a fan-out of parallel spawns must not
+// evict the results of its earliest runs before the model gets around to collecting them.
+const FINISHED_KEPT = 50;
 
 // ---------------------------------------------------------------- idle watchdog
 
@@ -285,7 +403,8 @@ function wakeModel(run: Run): void {
 		run.state !== "completed" &&
 		run.state !== "failed" &&
 		run.state !== "timed_out" &&
-		run.state !== "stalled"
+		run.state !== "stalled" &&
+		run.state !== "turn_limited"
 	)
 		return;
 	if (run.waiters) return; // a wait call is already delivering the result
@@ -299,7 +418,9 @@ function wakeModel(run: Run): void {
 			? `Collect the result with subagents wait/status id "${run.id}".`
 			: run.state === "stalled"
 				? `${run.errorMessage ?? `Run stalled (no output for ${quietSeconds}s) — it was killed.`} Retry with a smaller/split task or a larger timeoutSeconds. Fetch the partial output with subagents status/wait id "${run.id}".`
-				: `You may retry (larger timeoutSeconds or a smaller split task). Fetch the partial output with subagents status/wait id "${run.id}".`;
+				: run.state === "turn_limited"
+					? `${run.errorMessage ?? `Run hit its turn cap (${run.maxTurns ?? 0} turns).`} The work is probably unfinished: split it into smaller tasks or raise maxTurns/roleMaxTurns in ~/.pi/agent/subagents.json. Fetch the partial output with subagents status/wait id "${run.id}".`
+					: `You may retry (larger timeoutSeconds or a smaller split task). Fetch the partial output with subagents status/wait id "${run.id}".`;
 	const content = [
 		`Subagent run ${run.id} (${run.role}) ${run.state} after ${elapsed}s.`,
 		`task: ${run.task.slice(0, 200)}`,
@@ -318,6 +439,15 @@ function wakeModel(run: Run): void {
 }
 
 // ---------------------------------------------------------------- child process
+
+/**
+ * Nesting depth of this process: 0 for a top-level agent, incremented by 1 in every
+ * spawned child (`PI_SUBAGENT_DEPTH`). Missing or non-numeric → 0.
+ */
+function subagentDepth(): number {
+	const parsed = Number.parseInt(process.env.PI_SUBAGENT_DEPTH ?? "", 10);
+	return Number.isNaN(parsed) ? 0 : parsed;
+}
 
 function getPiInvocation(args: string[]): { command: string; args: string[] } {
 	// 1. Explicit override always wins.
@@ -350,29 +480,46 @@ function getPiInvocation(args: string[]): { command: string; args: string[] } {
 
 /** True when the role's allowlist can't match MCP tools (so the child must not get them). */
 function roleExcludesMcp(role: string): boolean {
-	try {
-		const file = JSON.parse(readFileSync(join(homedir(), ".pi", "agent", "roles.json"), "utf8")) as {
-			roles?: Record<string, any>;
-		};
-		const r = file.roles?.[role];
-		if (!r) return false;
-		const allow: string[] | undefined = Array.isArray(r.tools) ? r.tools : (r.tools?.allow ?? r.allowedTools);
-		if (!allow) return false;
-		return !allow.some((p) => p === "*" || p.startsWith("mcp") || p.startsWith("*"));
-	} catch {
-		return false;
-	}
+	const r = loadRoleConfig()[role];
+	if (!r) return false;
+	const allow: string[] | undefined = Array.isArray(r.tools) ? r.tools : (r.tools?.allow ?? r.allowedTools);
+	if (!allow) return false;
+	return !allow.some((p) => p === "*" || p.startsWith("mcp") || p.startsWith("*"));
+}
+
+/** Effective turn cap for a role: `roleMaxTurns[role] ?? maxTurns`; 0 = unlimited. */
+function effectiveMaxTurns(role: string): number {
+	const override = config.roleMaxTurns?.[role];
+	const cap = typeof override === "number" && Number.isFinite(override) ? override : config.maxTurns;
+	return typeof cap === "number" && Number.isFinite(cap) && cap > 0 ? Math.floor(cap) : 0;
 }
 
 function launchRun(run: Run): void {
 	run.state = "running";
-	run.spawnedAt = Date.now();
+	// The deadline was armed when the run was created, so a queued run is bounded too;
+	// re-arm it here for whatever budget is left after the queue wait.
+	clearTimeout(run.timeoutHandle);
+	const remainingMs = Math.max(1000, run.timeoutMs - (Date.now() - run.spawnedAt));
+	run.timeoutHandle = setTimeout(() => killRun(run, "timed_out"), remainingMs);
+	// Baseline the idle watchdog at launch, not at creation — otherwise a long queue
+	// wait looks like silent output and the watchdog kills the child immediately.
+	run.lastEventAt = Date.now();
+
+	// Transport is fixed per run so a config change mid-run cannot mix protocols.
+	const transport: "rpc" | "json" = config.mode === "json" ? "json" : "rpc";
+
+	// Turn cap applies to rpc runs only: json children are single-shot, so their
+	// only bound is the deadline. 0 = unlimited.
+	run.turns = 0;
+	run.wrapUpSent = false;
+	run.maxTurns = transport === "rpc" ? effectiveMaxTurns(run.role) : 0;
 
 	// pi's MCP extension auto-activates `direct` MCP tools regardless of the roles
 	// extension's filter; drop them at the CLI level when the role doesn't allow them.
-	const args = ["--mode", "json", "--no-session", "--role", run.role];
+	const args = ["--mode", transport, "--no-session", "--role", run.role];
 	if (roleExcludesMcp(run.role)) args.push("--exclude-tools", "mcp__*");
-	args.push("--", run.task);
+	// rpc mode takes the task on stdin; json mode takes it as the trailing argument.
+	if (transport === "json") args.push("--", run.task);
 	const invocation = getPiInvocation(args);
 	// Keep the exact launch line so a spawn failure is diagnosable from the tool
 	// result alone ("esm/resolve:241" with no command/cwd cost a long hunt once).
@@ -382,19 +529,95 @@ function launchRun(run: Run): void {
 		proc = spawn(invocation.command, invocation.args, {
 			cwd: run.cwd,
 			shell: false,
-			stdio: ["ignore", "pipe", "pipe"],
+			env: { ...process.env, PI_SUBAGENT_DEPTH: String(subagentDepth() + 1) },
+			stdio: [transport === "rpc" ? "pipe" : "ignore", "pipe", "pipe"],
 		});
 	} catch (err) {
 		run.state = "failed";
 		run.errorMessage = `spawn failed: ${err instanceof Error ? err.message : String(err)}`;
 		run.endedAt = Date.now();
 		clearTimeout(run.timeoutHandle);
+		clearTimeout(run.queueHandle);
 		markFinished(run);
 		notifyRunEnded(run);
 		return;
 	}
 	run.proc = proc;
 	startWatchdog();
+
+	/** Mark the run failed from a stdin failure — never throws out of the event loop. */
+	const failFromStdin = (message: string) => {
+		if (run.state !== "running") return;
+		run.state = "failed";
+		run.errorMessage = message;
+		run.endedAt = Date.now();
+		clearTimeout(run.queueHandle);
+		markFinished(run);
+		notifyRunEnded(run);
+		// The child may be hung with a broken stdin; do not leave it until the deadline.
+		try {
+			if (!run.exited) run.proc?.kill("SIGTERM");
+		} catch {
+			/* already gone */
+		}
+	};
+
+	// Fire-and-forget: a stdin write is never awaited (a child that stops reading
+	// would otherwise wedge the extension). Failures arrive via the `error` event.
+	const writeStdin = (payload: unknown) => {
+		const stdin = proc.stdin;
+		if (!stdin || stdin.destroyed || !stdin.writable) {
+			failFromStdin("stdin closed before write");
+			return;
+		}
+		try {
+			stdin.write(`${JSON.stringify(payload)}\n`);
+		} catch (err) {
+			failFromStdin(`stdin write failed: ${err instanceof Error ? err.message : String(err)}`);
+		}
+	};
+
+	// Command ids must stay unique per child; the initial prompt takes "1".
+	let stdinSeq = 1;
+	const nextStdinId = () => String(++stdinSeq);
+
+	proc.stdin?.on("error", (err) => {
+		// EPIPE/ECONNRESET on the child's stdin must surface as a failed run, not as
+		// an unhandled 'error' event that takes the parent down.
+		failFromStdin(`stdin error: ${err.message}`);
+	});
+
+	/**
+	 * `agent_settled` is the rpc completion signal: the child is idle and will not
+	 * exit on its own (rpc mode stays alive for more commands). Finalise the run
+	 * here and close stdin so the child shuts down; `close` then acts only as the
+	 * fallback for a child that dies on its own.
+	 */
+	const settle = () => {
+		if (run.state !== "running") return;
+		run.state =
+			run.stopReason === "aborted"
+				? "stopped"
+				: run.stopReason === "error"
+					? "failed"
+					: "completed";
+		run.endedAt = Date.now();
+		if (run.state === "failed" && !run.errorMessage) run.errorMessage = "child agent ended with an error";
+		markFinished(run);
+		notifyRunEnded(run);
+		try {
+			proc.stdin?.end();
+		} catch {
+			/* already gone */
+		}
+		clearTimeout(run.timeoutHandle);
+		clearTimeout(run.queueHandle);
+		// Safety net: a child that ignores the EOF must still be reaped.
+		clearTimeout(run.escalationHandle);
+		run.escalationHandle = setTimeout(() => {
+			if (!run.exited && run.proc) run.proc.kill("SIGKILL");
+		}, 5000);
+	};
 
 	let buffer = "";
 	const processLine = (line: string) => {
@@ -406,6 +629,47 @@ function launchRun(run: Run): void {
 			return;
 		}
 		run.lastEventAt = Date.now();
+		if (event.type === "response" && event.success === false) {
+			// A rejected command (e.g. the initial prompt) is the run's real failure reason.
+			run.errorMessage = typeof event.error === "string" && event.error ? event.error : "request failed";
+		} else if (event.type === "extension_ui_request") {
+			// Never let a child block forever on a dialog: cancel every interactive
+			// request. notify/setStatus/setTitle/etc. are fire-and-forget and ignored.
+			const method = event.method;
+			if (
+				(method === "select" || method === "confirm" || method === "input" || method === "editor") &&
+				event.id
+			) {
+				writeStdin({ type: "extension_ui_response", id: event.id, cancelled: true });
+			}
+			return;
+		} else if (event.type === "agent_settled") {
+			if (transport === "rpc") settle();
+			return;
+		} else if (event.type === "turn_end") {
+			// A child turn completed. Count it (this is the turn cap's counter —
+			// `usage.turns` counts assistant messages and is not the same thing) and
+			// enforce the cap: one wrap-up steer, then a hard kill at the cap.
+			run.turns = (run.turns ?? 0) + 1;
+			const cap = run.maxTurns ?? 0;
+			if (transport === "rpc" && cap > 0) {
+				if (!run.wrapUpSent && cap >= 3 && run.turns >= cap - 2) {
+					run.wrapUpSent = true;
+					writeStdin({
+						id: nextStdinId(),
+						type: "steer",
+						message:
+							"Wrap up now: summarise what you have and end your reply. Do not start new work.",
+					});
+				}
+				if (run.turns >= cap) {
+					run.errorMessage = `turn cap reached: ${cap} turns (role ${run.role}); killed before completion`;
+					killRun(run, "turn_limited");
+					return;
+				}
+			}
+			return;
+		}
 		if (event.type === "tool_execution_start") {
 			run.activeTool = typeof event.toolName === "string" ? event.toolName : "unknown";
 			run.activeToolAt = Date.now();
@@ -447,13 +711,15 @@ function launchRun(run: Run): void {
 		// bare `node:internal/modules/esm/resolve:241` header before the actual
 		// `Error [ERR_MODULE_NOT_FOUND]: Cannot find module '...'` reason.
 		run.stderrTail = (run.stderrTail + text).slice(-4000);
-		if (!run.errorMessage) run.errorMessage = run.stderrTail.trim().slice(0, 2000);
+		// stderr is not itself a failure: warnings land here on successful runs too, so
+		// the verdict decides (see the `close` handler) whether it becomes errorMessage.
 	});
 
 	proc.on("error", (err) => {
 		run.exited = true;
 		clearTimeout(run.timeoutHandle);
 		clearTimeout(run.escalationHandle);
+		clearTimeout(run.queueHandle);
 		// Do not clobber a verdict the watchdog or stop already reached.
 		if (run.state === "running") {
 			run.state = "failed";
@@ -467,6 +733,7 @@ function launchRun(run: Run): void {
 	proc.on("close", (code) => {
 		run.exited = true;
 		clearTimeout(run.escalationHandle);
+		clearTimeout(run.queueHandle);
 		if (buffer.trim()) processLine(buffer);
 		clearTimeout(run.timeoutHandle);
 		if (run.state === "running") {
@@ -487,10 +754,13 @@ function launchRun(run: Run): void {
 		notifyRunEnded(run);
 	});
 
-	run.timeoutHandle = setTimeout(() => killRun(run, "timed_out"), run.timeoutMs);
+	if (transport === "rpc") {
+		// The only command the child ever receives. One line, written once.
+		writeStdin({ id: "1", type: "prompt", message: run.task });
+	}
 }
 
-function killRun(run: Run, state: "timed_out" | "stopped" | "stalled"): void {
+function killRun(run: Run, state: "timed_out" | "stopped" | "stalled" | "turn_limited"): void {
 	clearTimeout(run.timeoutHandle);
 	clearTimeout(run.escalationHandle);
 	clearTimeout(run.queueHandle);
@@ -525,8 +795,12 @@ function finalOutput(run: Run): string {
 
 function capOutput(text: string): string {
 	const cap = config.outputCapKb * 1024;
-	if (Buffer.byteLength(text, "utf8") <= cap) return text;
-	return `${text.slice(0, cap)}\n\n[Output truncated: ${Buffer.byteLength(text, "utf8") - cap} bytes omitted.]`;
+	const bytes = Buffer.byteLength(text, "utf8");
+	if (bytes <= cap) return text;
+	// Byte cap, so cut bytes and let the decoder drop any incomplete trailing
+	// sequence (`stream: true`) instead of slicing chars and overshooting.
+	const kept = new TextDecoder("utf-8").decode(Buffer.from(text, "utf8").subarray(0, cap), { stream: true });
+	return `${kept}\n\n[Output truncated: ${bytes - Buffer.byteLength(kept, "utf8")} bytes omitted.]`;
 }
 
 function fmtTokens(n: number): string {
@@ -557,6 +831,7 @@ function runSummaryLine(run: Run): string {
 		parts.push(`took ${Math.round((run.endedAt - run.spawnedAt) / 1000)}s`);
 	}
 	parts.push(`${run.usage.turns} turns, ↑${fmtTokens(run.usage.input)} ↓${fmtTokens(run.usage.output)}`);
+	if (run.maxTurns && run.maxTurns > 0) parts.push(`cap ${run.turns ?? 0}/${run.maxTurns} turns`);
 	if (run.usage.cost > 0) parts.push(`$${run.usage.cost.toFixed(4)}`);
 	if (run.model) parts.push(run.model);
 	if (clarificationOf(finalOutput(run))) parts.push("NEEDS CLARIFICATION");
@@ -604,6 +879,7 @@ function statusLine(run: Run): string {
 	}
 	parts.push(`ctx ${run.contextTokens ? fmtTokens(run.contextTokens) : "-"}`);
 	parts.push(`${run.usage.turns} turns`);
+	if (run.maxTurns && run.maxTurns > 0) parts.push(`cap ${run.turns ?? 0}/${run.maxTurns}`);
 	return parts.join(" · ");
 }
 
@@ -644,12 +920,14 @@ function toolText(text: string, details: ToolDetails, isError = false): AgentToo
 const SubagentToolParams = Type.Object({
 	action: StringEnum(["spawn", "status", "list", "wait", "stop"] as const, {
 		description:
-			"spawn: start a background run (needs role + task); status: inspect one run (needs id); list: all runs; wait: block until a run finishes; stop: kill a run (needs id)",
+			"spawn: start a background run (needs role + task); status: inspect one run (needs id); list: all runs; wait: block until one run finishes (needs id — use list to enumerate); stop: kill a run (needs id)",
 	}),
 	role: Type.Optional(Type.String({ description: "spawn: role name defined in ~/.pi/agent/roles.json (or ~/.pi/agent/roles/<name>.json)" })),
 	task: Type.Optional(Type.String({ description: "spawn: task prompt for the subagent" })),
 	cwd: Type.Optional(Type.String({ description: "spawn: working directory (default: session cwd)" })),
-	id: Type.Optional(Type.String({ description: "status/wait/stop: run id" })),
+	id: Type.Optional(
+		Type.String({ description: "status/wait/stop: run id (required for all three; use list to enumerate)" }),
+	),
 	timeoutSeconds: Type.Optional(
 		Type.Number({
 			description:
@@ -659,7 +937,7 @@ const SubagentToolParams = Type.Object({
 });
 
 /** Poll until the run is terminal or the deadline passes; returns the run. */
-async function waitPoll(id: string | undefined, deadlineMs: number, signal?: AbortSignal): Promise<Run | undefined> {
+async function waitPoll(id: string, deadlineMs: number, signal?: AbortSignal): Promise<Run | undefined> {
 	const started = Date.now();
 	return new Promise((resolve) => {
 		let held: Run | undefined; // run flagged as being waited on
@@ -681,15 +959,9 @@ async function waitPoll(id: string | undefined, deadlineMs: number, signal?: Abo
 		};
 		const onAbort = () => done(undefined);
 		const tick = () => {
-			let target: Run | undefined;
-			if (id) {
-				target = runs.get(id);
-			} else {
-				if (runs.size === 0) return done(undefined);
-				const byNewest = [...runs.values()].sort((a, b) => b.spawnedAt - a.spawnedAt);
-				// Newest active run wins; a finished run is never picked implicitly.
-				target = byNewest.find(isActive);
-			}
+			// id is required and validated by the caller: guessing "newest active run" is a
+			// coin flip when several spawns queue.
+			const target = runs.get(id);
 			if (!target) return done(undefined);
 			if (!held) {
 				held = target;
@@ -713,8 +985,9 @@ export default function (pi: ExtensionAPI) {
 		description: [
 			"Delegate a task to a background subagent running as a pi role (defined in ~/.pi/agent/roles.json or ~/.pi/agent/roles/<name>.json).",
 			"spawn is non-blocking: it returns a run id immediately; the child runs in its own session with the role's model, tools, skills and system prompt.",
-			"Manage runs with status (one run, needs id), list (all runs), wait (block until done), stop (kill).",
+			"Manage runs with status (one run, needs id), list (all runs), wait (needs id; block until that run is done), stop (kill).",
 			"Runs have deadlines (per-spawn timeoutSeconds > roleTimeouts > timeoutSeconds); a timed-out run is killed and its partial output returned.",
+			"rpc runs are also capped by turn count (roleMaxTurns/maxTurns in subagents.json, 0 = unlimited): the child is steered to wrap up shortly before the cap and killed (state turn_limited) at it.",
 			"If a subagent is blocked, tell it to end its reply with `NEEDS-CLARIFICATION: <question>`; such a run is flagged in its result so you do not mistake it for finished work.",
 		].join(" "),
 		promptSnippet: "Background subagent delegation to pi roles from ~/.pi/agent/roles.json (spawn/status/list/wait/stop).",
@@ -726,6 +999,15 @@ export default function (pi: ExtensionAPI) {
 					if (!params.role || !params.task) {
 						return toolText("spawn requires role and task.", { action: "spawn" }, true);
 					}
+					const depth = subagentDepth();
+					if (depth >= config.maxDepth) {
+						return toolText(
+							`Recursion depth guard: this agent is at subagent depth ${depth} and maxDepth is ${config.maxDepth} — refusing to spawn another subagent. To allow deeper nesting, raise maxDepth in ~/.pi/agent/subagents.json.`,
+							{ action: "spawn", role: params.role },
+							true,
+						);
+					}
+
 					const roles = discoverRoles();
 					if (roles.length > 0 && !roles.includes(params.role)) {
 						return toolText(
@@ -742,6 +1024,7 @@ export default function (pi: ExtensionAPI) {
 								? config.roleTimeouts[params.role] * 1000
 								: config.timeoutSeconds * 1000;
 
+					const turnCap = config.mode === "json" ? 0 : effectiveMaxTurns(params.role);
 					const run: Run = {
 						id: newRunId(),
 						role: params.role,
@@ -757,9 +1040,13 @@ export default function (pi: ExtensionAPI) {
 					runs.set(run.id, run);
 
 					// Concurrency gate: launch when a slot frees up.
+					// Arm the run's deadline now: a run waiting for a slot must not be unbounded.
+					run.timeoutHandle = setTimeout(() => killRun(run, "timed_out"), run.timeoutMs);
+
 					const maybeLaunch = () => {
 						if (!isActive(run) || run.state !== "queued") return;
-						if (activeCount() > config.maxConcurrent) {
+						// maxConcurrent <= 0 means unlimited (a `> 0` guard: 0 would never let anything start).
+						if (config.maxConcurrent > 0 && activeCount() > config.maxConcurrent) {
 							run.queueHandle = setTimeout(maybeLaunch, 1000);
 							return;
 						}
@@ -772,6 +1059,13 @@ export default function (pi: ExtensionAPI) {
 						[
 							`Spawned background subagent ${run.id} (role: ${params.role}).`,
 							`Timeout: ${Math.round(timeoutMs / 1000)}s. Non-blocking — continue other work and collect later.`,
+							...(turnCap > 0
+								? [
+										turnCap >= 3
+											? `Turn cap: ${turnCap} turns (it is steered to wrap up at ${turnCap - 2}).`
+											: `Turn cap: ${turnCap} turns.`,
+									]
+								: []),
 							`Collect with action "wait" (id "${run.id}"), inspect with "status", or "list" all runs.`,
 						].join(" "),
 						{ action: "spawn", id: run.id, role: params.role },
@@ -804,6 +1098,13 @@ export default function (pi: ExtensionAPI) {
 				}
 
 				case "wait": {
+					if (!params.id) {
+						return toolText(
+							"wait requires id — pass the run id (use list to enumerate runs).",
+							{ action: "wait", id: params.id },
+							true,
+						);
+					}
 					const deadlineMs = (params.timeoutSeconds ?? 30) * 1000;
 					const run = await waitPoll(params.id, deadlineMs, _signal);
 					if (_signal?.aborted && !run) {
@@ -813,11 +1114,7 @@ export default function (pi: ExtensionAPI) {
 						});
 					}
 					if (!run) {
-						return toolText(
-							`wait: no run found${params.id ? ` for id ${params.id}` : ""}. Use list.`,
-							{ action: "wait", id: params.id },
-							true,
-						);
+						return toolText(`wait: no run found for id ${params.id}. Use list.`, { action: "wait", id: params.id }, true);
 					}
 					return toolText(
 						isActive(run)
@@ -912,7 +1209,17 @@ export default function (pi: ExtensionAPI) {
 
 	pi.on("session_start", (_e, ctx) => {
 		currentCtx = ctx;
+		projectCwd = ctx.cwd;
+		try {
+			projectTrusted = typeof ctx.isProjectTrusted === "function" ? ctx.isProjectTrusted() === true : false;
+		} catch {
+			projectTrusted = false;
+		}
 		config = loadConfig();
+		// Roles may have changed on disk between sessions; drop the memoized merge
+		// (the key also covers cwd/trust, but an explicit reset keeps it airtight).
+		roleConfigCacheKey = undefined;
+		roleConfigCache = undefined;
 		updateStatus();
 	});
 
@@ -924,17 +1231,30 @@ export default function (pi: ExtensionAPI) {
 		stopWatchdog();
 	});
 
-	// Append active runs to the system prompt, composing with other
-	// extensions' edits (roles) instead of replacing them: read the current
-	// prompt, append the section, return the full string.
+	// Contribute the active runs as a system-prompt *section* instead of
+	// returning `systemPrompt`: a returned `systemPrompt` is a full
+	// forceSystemPrompt override, which reprojects the whole prompt head on
+	// every request and invalidates the prompt cache. Sections are diffed by
+	// `diffSystemPromptSections` and persisted as patches, so the content must be
+	// deterministic and the key must be emitted on every run — when nothing is
+	// active it collapses to the constant "none" form, keeping the section set
+	// (and therefore the cache) stable across turns.
 	pi.on("before_agent_start", (event) => {
-		const active = [...runs.values()].filter(isActive).slice(0, 10);
-		if (active.length === 0) return;
-		const lines = active.map(
-			(r) => `- ${r.id} ${r.role} (state: ${r.state === "queued" ? "queued (waiting for a free slot)" : r.state})`,
-		);
-		const section = `\n\n# Active subagents\nBackground work launched earlier is still running. Do not re-spawn these tasks.\n${lines.join("\n")}\nUse subagent status/list/wait to check or collect results.`;
-		return { systemPrompt: event.systemPrompt + section };
+		const sections = event.systemPromptOptions?.sections;
+		if (!sections) return;
+		const active = [...runs.values()].filter(isActive);
+		sections.subagents =
+			active.length === 0
+				? "none (no subagent runs are active)"
+				: [
+						"Background work launched earlier is still running. Do not re-spawn these tasks.",
+						...active.map(
+							(r) =>
+								`- ${r.id} ${r.role} (state: ${r.state === "queued" ? "queued (waiting for a free slot)" : r.state})`,
+						),
+						"Use subagent status/list/wait to check or collect results.",
+					].join("\n");
+		return undefined;
 	});
 
 	// Footer status refresh at turn boundaries.

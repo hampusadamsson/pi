@@ -3,7 +3,12 @@
  *
  * Routes the local model cluster through Bifrost's OpenAI-compatible `/v1`
  * endpoint. Models are fetched from `/v1/models`; ids arrive as
- * `ollama/<model>` (Bifrost unified routing) and the prefix is stripped.
+ * `<provider>/<model>` (Bifrost unified routing) and a prefix is stripped only
+ * for the providers named in STRIP_PREFIXES.
+ *
+ * The model list is never hardcoded here: whatever Bifrost discovers from its
+ * upstreams is what this provider offers. Loading a model in LM Studio, or one
+ * appearing on the OpenCode gateway, needs no change in this file.
  *
  * TLS: Bifrost serves a self-signed cert. Rather than disabling verification
  * process-wide (the old NODE_TLS_REJECT_UNAUTHORIZED=0 leaked into MCP,
@@ -126,7 +131,15 @@ installBifrostTlsTrust();
 
 // Upstream prefixes stripped from ids (bare ids keep existing selections/roles
 // working). Comma-separated; everything else keeps its `provider/` prefix.
-const STRIP_PREFIXES = (process.env.BIFROST_STRIP_PREFIXES ?? "ollama")
+//
+// Empty by default on purpose. Bifrost already prefixes a custom provider's ids
+// with its own name (`lmstudio/qwen3.8-27b`), and that prefix is what Bifrost
+// uses to route a request back to the right upstream. Stripping it turns
+// `qwen3.8-27b` into a bare id that Bifrost must re-resolve, which is ambiguous
+// as soon as two providers serve the same model name. Strip a prefix only for a
+// provider whose ids resolve unambiguously without it (e.g.
+// BIFROST_STRIP_PREFIXES=opencode-go).
+const STRIP_PREFIXES = (process.env.BIFROST_STRIP_PREFIXES ?? "")
 	.split(",")
 	.map((s) => s.trim())
 	.filter(Boolean);

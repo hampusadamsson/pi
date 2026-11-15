@@ -8,8 +8,6 @@ Rules: concrete over vague (`exact query/command`, not "checked logs"). Search b
 
 # Development Guidelines
 
-Never use kubectl cli.
-Never use gcloud commands that can edit, destroy or otherwise impact services. Read only. Ask if required.
 Always load github skill before using gh.
 
 1. Think Before Coding — state assumptions; ask if uncertain. If multiple interpretations exist, list them, don't silently pick one. Flag simpler alternatives and overcomplication. Stop and ask if something's unclear.
@@ -26,4 +24,3 @@ Always load github skill before using gh.
 - No heavy formatting unless asked.
 - When proposing several items, number them so the user can reply like "1 yes, 2 skip".
 - Keep proposals short. Say what you did not do.
-- Always load the jira skill before drafting, searching, creating or updating Jira tickets.

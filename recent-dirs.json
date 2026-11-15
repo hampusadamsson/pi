@@ -1,0 +1,24 @@
+{
+  "dirs": [
+    "/Users/hampus/program/uipi",
+    "/Users/hampus/program/uipi/packages/server",
+    "/tmp/uipi-probe",
+    "/Users/hampus",
+    "/Users/hampus/.pi/agent",
+    "/tmp",
+    "/tmp/uipi-xproj-abc123",
+    "/private/tmp/pitest",
+    "/Users/hampus/program",
+    "/Users/hampus/program/kb",
+    "/Users/hampus/program/automaton",
+    "/Users/hampus/program/homeserver",
+    "/Users/hampus/.local/share/chezmoi",
+    "/Users/hampus/program/mlx-auto",
+    "/Users/hampus/program/kb/example",
+    "/Users/hampus/program/kanban_simple",
+    "/Users/hampus/kanban_oneq",
+    "/Users/hampus/program/kanban",
+    "/private/tmp",
+    "/Users/hampus/program/uipi/packages/server/Users-hampus-program-uipi-packages-server"
+  ]
+}

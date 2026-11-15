@@ -22,3 +22,6 @@ npm/node_modules
 /extensions/bifrost-ca.pem
 /.hypa/hypa.db
 /web-search-cache
+/sessions-subagents
+/sessions-subagents
+/paseo.txt

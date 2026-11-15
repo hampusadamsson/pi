@@ -1,14 +1,9 @@
 {
   "active": "work",
-  "shellPolicy": {
-    "deny": [
-      "kubectl*"
-    ]
-  },
   "roles": {
     "work": {
       "description": "Senior dev. Write and test code",
-      "model": "vertex-anthropic/claude-sonnet-5-5",
+      "model": "bifrost/opencode-go/deepseek-v4.1-flash",
       "systemPrompt": "You are a developer. You are direct, efficient and brief.",
       "promptMode": "replace",
       "tools": {
@@ -19,18 +14,28 @@
           "hypa_grep",
           "hypa_shell",
           "hypa_find",
-          "hypa_ls"
+          "hypa_ls",
+          "mcp__mysharedbrain__read_note",
+          "mcp__mysharedbrain__read_notes",
+          "mcp__mysharedbrain__list_notes",
+          "mcp__mysharedbrain__list_directory",
+          "mcp__mysharedbrain__get_frontmatter",
+          "mcp__mysharedbrain__search_by_tag",
+          "mcp__mysharedbrain__search_notes",
+          "mcp__mysharedbrain__get_backlinks",
+          "mcp__mysharedbrain__get_outgoing"
         ],
         "deny": []
       },
       "skills": [
         "obsidian",
-        "github"
+        "github",
+        "kubectl"
       ]
     },
     "architect": {
       "description": "Delegator: plans and reviews, does all work through subagents",
-      "model": "vertex-anthropic/claude-sonnet-5-5",
+      "model": "bifrost/opencode-go/deepseek-v4.1-flash",
       "promptMode": "append",
       "systemPromptFile": "prompts/architect.md",
       "tools": {
@@ -40,7 +45,18 @@
           "hypa_find",
           "hypa_ls",
           "subagents",
-          "todo"
+          "todo",
+          "mcp__mysharedbrain__read_note",
+          "mcp__mysharedbrain__read_notes",
+          "mcp__mysharedbrain__list_notes",
+          "mcp__mysharedbrain__list_directory",
+          "mcp__mysharedbrain__get_frontmatter",
+          "mcp__mysharedbrain__search_by_tag",
+          "mcp__mysharedbrain__search_notes",
+          "mcp__mysharedbrain__note_history",
+          "mcp__mysharedbrain__get_backlinks",
+          "mcp__mysharedbrain__get_outgoing",
+          "mcp__mysharedbrain__recent_changes"
         ]
       },
       "skills": [
@@ -50,8 +66,8 @@
       "hidden": false
     },
     "researcher": {
-      "description": "Research assistant with access to all skills (Jira, Confluence, GitHub, Obsidian, Snowflake, Humio)",
-      "model": "vertex-anthropic/claude-sonnet-5-5",
+      "description": "Research assistant with access to all skills (GitHub, Obsidian)",
+      "model": "bifrost/opencode-go/deepseek-v4.1-flash",
       "promptMode": "append",
       "systemPromptFile": "prompts/researcher.md",
       "tools": {
@@ -69,37 +85,34 @@
           "source_check",
           "fetch_content",
           "get_search_content",
-          "mcp__atlassian__confluence_add_label",
-          "mcp__atlassian__confluence_get_page",
-          "mcp__atlassian__confluence_create_page",
-          "mcp__atlassian__confluence_move_page",
-          "mcp__atlassian__confluence_search",
-          "mcp__atlassian__confluence_update_page_section",
-          "mcp__atlassian__confluence_get_page_children",
-          "mcp__atlassian__confluence_update_page",
-          "mcp__atlassian__confluence_get_space_page_tree",
-          "mcp__atlassian__jira_search",
-          "mcp__atlassian__jira_create_issue",
-          "mcp__atlassian__jira_get_issue",
-          "mcp__atlassian__jira_update_issue",
-          "mcp__atlassian__jira_add_comment",
-          "mcp__atlassian__confluence_add_comment",
-          "mcp__humio__search",
-          "mcp__humio__list_repos",
-          "mcp__snowflake__run_snowflake_query"
+          "mcp__mysharedbrain__read_note",
+          "mcp__mysharedbrain__read_notes",
+          "mcp__mysharedbrain__list_notes",
+          "mcp__mysharedbrain__list_directory",
+          "mcp__mysharedbrain__get_frontmatter",
+          "mcp__mysharedbrain__search_by_tag",
+          "mcp__mysharedbrain__search_notes",
+          "mcp__mysharedbrain__note_history",
+          "mcp__mysharedbrain__get_backlinks",
+          "mcp__mysharedbrain__get_outgoing",
+          "mcp__mysharedbrain__recent_changes",
+          "mcp__mysharedbrain__create_note",
+          "mcp__mysharedbrain__update_note",
+          "mcp__mysharedbrain__append_note",
+          "mcp__mysharedbrain__patch_note",
+          "mcp__mysharedbrain__set_frontmatter",
+          "mcp__mysharedbrain__move_note",
+          "mcp__mysharedbrain__delete_note",
+          "mcp__mysharedbrain__restore_note",
+          "mcp__mysharedbrain__give_feedback",
+          "mcp__mysharedbrain__ask_question"
         ]
       },
       "skills": [
-        "jira",
-        "confluence",
         "github",
         "obsidian",
-        "snowflake",
         "vault-daily-raw",
         "vault-maintenance",
-        "humio",
-        "dml-service-documentation",
-        "ml-model-docs-sync",
         "sync-vault-context"
       ],
       "hidden": false
@@ -118,7 +131,28 @@
           "hypa_shell",
           "hypa_find",
           "hypa_ls",
-          "web_search"
+          "web_search",
+          "mcp__mysharedbrain__read_note",
+          "mcp__mysharedbrain__read_notes",
+          "mcp__mysharedbrain__list_notes",
+          "mcp__mysharedbrain__list_directory",
+          "mcp__mysharedbrain__get_frontmatter",
+          "mcp__mysharedbrain__search_by_tag",
+          "mcp__mysharedbrain__search_notes",
+          "mcp__mysharedbrain__note_history",
+          "mcp__mysharedbrain__get_backlinks",
+          "mcp__mysharedbrain__get_outgoing",
+          "mcp__mysharedbrain__recent_changes",
+          "mcp__mysharedbrain__create_note",
+          "mcp__mysharedbrain__update_note",
+          "mcp__mysharedbrain__append_note",
+          "mcp__mysharedbrain__patch_note",
+          "mcp__mysharedbrain__set_frontmatter",
+          "mcp__mysharedbrain__move_note",
+          "mcp__mysharedbrain__delete_note",
+          "mcp__mysharedbrain__restore_note",
+          "mcp__mysharedbrain__give_feedback",
+          "mcp__mysharedbrain__ask_question"
         ]
       },
       "skills": [],
@@ -126,13 +160,34 @@
     },
     "ticketor": {
       "description": "kb ticket manager",
-      "model": "bifrost/qwen3.8-27b",
+      "model": "bifrost/opencode-go/deepseek-v4.1-flash",
       "promptMode": "replace",
       "systemPrompt": "You manage tickets with the kb cli. This is the only way to manage tickets.",
       "tools": {
         "allow": [
           "hypa_shell",
-          "web_search"
+          "web_search",
+          "mcp__mysharedbrain__read_note",
+          "mcp__mysharedbrain__read_notes",
+          "mcp__mysharedbrain__list_notes",
+          "mcp__mysharedbrain__list_directory",
+          "mcp__mysharedbrain__get_frontmatter",
+          "mcp__mysharedbrain__search_by_tag",
+          "mcp__mysharedbrain__search_notes",
+          "mcp__mysharedbrain__note_history",
+          "mcp__mysharedbrain__get_backlinks",
+          "mcp__mysharedbrain__get_outgoing",
+          "mcp__mysharedbrain__recent_changes",
+          "mcp__mysharedbrain__create_note",
+          "mcp__mysharedbrain__update_note",
+          "mcp__mysharedbrain__append_note",
+          "mcp__mysharedbrain__patch_note",
+          "mcp__mysharedbrain__set_frontmatter",
+          "mcp__mysharedbrain__move_note",
+          "mcp__mysharedbrain__delete_note",
+          "mcp__mysharedbrain__restore_note",
+          "mcp__mysharedbrain__give_feedback",
+          "mcp__mysharedbrain__ask_question"
         ]
       },
       "skills": [],
@@ -140,7 +195,7 @@
     },
     "small": {
       "description": "Trivial mechanical tasks: small edits, commits, verification runs. Cheapest role.",
-      "model": "vertex-anthropic/claude-haiku-5-5",
+      "model": "bifrost/opencode-go/deepseek-v4.1-flash",
       "promptMode": "replace",
       "systemPrompt": "You are an agent working on a task. Your job is small, precise, mechanical edits and file operations. Follow the instructions exactly. Do not investigate, refactor or make judgement calls; if the task needs engineering judgement, say so instead of guessing.",
       "tools": {
@@ -151,7 +206,28 @@
           "hypa_grep",
           "hypa_shell",
           "hypa_find",
-          "hypa_ls"
+          "hypa_ls",
+          "mcp__mysharedbrain__read_note",
+          "mcp__mysharedbrain__read_notes",
+          "mcp__mysharedbrain__list_notes",
+          "mcp__mysharedbrain__list_directory",
+          "mcp__mysharedbrain__get_frontmatter",
+          "mcp__mysharedbrain__search_by_tag",
+          "mcp__mysharedbrain__search_notes",
+          "mcp__mysharedbrain__note_history",
+          "mcp__mysharedbrain__get_backlinks",
+          "mcp__mysharedbrain__get_outgoing",
+          "mcp__mysharedbrain__recent_changes",
+          "mcp__mysharedbrain__create_note",
+          "mcp__mysharedbrain__update_note",
+          "mcp__mysharedbrain__append_note",
+          "mcp__mysharedbrain__patch_note",
+          "mcp__mysharedbrain__set_frontmatter",
+          "mcp__mysharedbrain__move_note",
+          "mcp__mysharedbrain__delete_note",
+          "mcp__mysharedbrain__restore_note",
+          "mcp__mysharedbrain__give_feedback",
+          "mcp__mysharedbrain__ask_question"
         ]
       },
       "skills": [
@@ -159,24 +235,9 @@
       ],
       "hidden": true
     },
-    "humio": {
-      "description": "Humio + Snowflake log/query investigation",
-      "model": "vertex-anthropic/claude-haiku-5-5",
-      "promptMode": "replace",
-      "systemPromptFile": "prompts/humio.md",
-      "tools": {
-        "allow": [
-          "mcp__humio__search",
-          "mcp__humio__list_repos",
-          "mcp__snowflake__run_snowflake_query"
-        ]
-      },
-      "skills": [],
-      "hidden": true
-    },
     "retriever": {
-      "description": "Read-only information retrieval (Jira, Confluence, GitHub, Obsidian, Snowflake, Humio) on the cheapest model",
-      "model": "vertex-anthropic/claude-haiku-5-5",
+      "description": "Read-only information retrieval (GitHub, Obsidian) on the cheapest model",
+      "model": "bifrost/opencode-go/deepseek-v4.1-flash",
       "promptMode": "append",
       "systemPromptFile": "prompts/retriever.md",
       "tools": {
@@ -185,39 +246,23 @@
           "hypa_grep",
           "hypa_find",
           "hypa_ls",
-          "mcp__atlassian__confluence_get_page",
-          "mcp__atlassian__confluence_search",
-          "mcp__atlassian__confluence_get_page_children",
-          "mcp__atlassian__confluence_get_space_page_tree",
-          "mcp__atlassian__jira_search",
-          "mcp__atlassian__jira_get_issue",
-          "mcp__humio__search",
-          "mcp__humio__list_repos",
-          "mcp__snowflake__run_snowflake_query"
+          "mcp__mysharedbrain__read_note",
+          "mcp__mysharedbrain__read_notes",
+          "mcp__mysharedbrain__list_notes",
+          "mcp__mysharedbrain__list_directory",
+          "mcp__mysharedbrain__get_frontmatter",
+          "mcp__mysharedbrain__search_by_tag",
+          "mcp__mysharedbrain__search_notes",
+          "mcp__mysharedbrain__note_history",
+          "mcp__mysharedbrain__get_backlinks",
+          "mcp__mysharedbrain__get_outgoing",
+          "mcp__mysharedbrain__recent_changes"
         ]
       },
       "skills": [
-        "jira",
-        "confluence",
         "github",
-        "obsidian",
-        "snowflake",
-        "humio"
+        "obsidian"
       ],
-      "hidden": true
-    },
-    "jira-ro": {
-      "description": "Read-only Jira",
-      "model": "vertex-anthropic/claude-haiku-5-5",
-      "promptMode": "replace",
-      "systemPrompt": ".",
-      "tools": {
-        "allow": [
-          "mcp__atlassian__jira_search",
-          "mcp__atlassian__jira_get_issue"
-        ]
-      },
-      "skills": [],
       "hidden": true
     }
   }

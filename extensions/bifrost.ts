@@ -6,7 +6,7 @@
  * `ollama/<model>` (Bifrost unified routing) and the prefix is stripped.
  *
  * TLS: Bifrost serves a self-signed cert. Rather than disabling verification
- * process-wide (the old NODE_TLS_REJECT_UNAUTHORIZED=0 leaked into Vertex, MCP,
+ * process-wide (the old NODE_TLS_REJECT_UNAUTHORIZED=0 leaked into MCP,
  * web fetches and every child process), only the Bifrost certificate itself is
  * pinned into Node's default CA store. Host and CA verification stay on for
  * every host: nothing except a server presenting this exact cert is trusted.

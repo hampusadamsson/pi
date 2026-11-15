@@ -3,61 +3,34 @@
     "mcpFooterStatus": "off"
   },
   "mcpServers": {
-    "snowflake": {
+    "mysharedbrain": {
       "type": "http",
-      "url": "https://snowflake-agentic-poc-mcp.data.stage.lendo.dev/mcp",
+      "url": "https://mysharedbrain.haadpi.duckdns.org:9443/mcp/",
+      "caFile": "~/.pi/agent/certs/mysharedbrain.pem",
       "enabled": true,
       "exposure": "hidden",
       "toolExposure": {
-        "run_snowflake_query": "deferred"
-      }
-    },
-    "humio": {
-      "command": "uvx",
-      "args": [
-        "--from",
-        "git+https://lendo-group.ghe.com/lendo-data-ml/humio-mcp.git@1.0.0",
-        "humio-mcp"
-      ],
-      "env": {
-        "HUMIO_TOKEN": "${HUMIO_TOKEN}",
-        "HUMIO_ENDPOINT": "https://lendo.logscale.eu-1.crowdstrike.com"
-      },
-      "exposure": "hidden",
-      "toolExposure": {
-        "search": "deferred",
-        "list_repos": "deferred"
-      }
-    },
-    "atlassian": {
-      "command": "uvx",
-      "args": [
-        "mcp-atlassian"
-      ],
-      "env": {
-        "CONFLUENCE_URL": "https://lendo-group.atlassian.net/wiki",
-        "CONFLUENCE_USERNAME": "hampus.adamsson@group.clar.co",
-        "JIRA_URL": "https://lendo-group.atlassian.net",
-        "JIRA_USERNAME": "hampus.adamsson@group.clar.co",
-        "JIRA_PROJECTS_FILTER": "DATA"
-      },
-      "exposure": "hidden",
-      "toolExposure": {
-        "confluence_add_label": "direct",
-        "confluence_get_page": "direct",
-        "confluence_create_page": "direct",
-        "confluence_move_page": "direct",
-        "confluence_search": "direct",
-        "confluence_update_page_section": "direct",
-        "confluence_get_page_children": "direct",
-        "confluence_update_page": "direct",
-        "confluence_get_space_page_tree": "direct",
-        "jira_search": "direct",
-        "jira_create_issue": "direct",
-        "jira_get_issue": "direct",
-        "jira_update_issue": "direct",
-        "jira_add_comment": "direct",
-        "confluence_add_comment": "direct"
+        "read_note": "direct",
+        "read_notes": "direct",
+        "list_notes": "direct",
+        "list_directory": "direct",
+        "get_frontmatter": "direct",
+        "search_by_tag": "direct",
+        "search_notes": "direct",
+        "note_history": "direct",
+        "get_backlinks": "direct",
+        "get_outgoing": "direct",
+        "recent_changes": "direct",
+        "create_note": "direct",
+        "update_note": "direct",
+        "append_note": "direct",
+        "patch_note": "direct",
+        "set_frontmatter": "direct",
+        "move_note": "direct",
+        "delete_note": "direct",
+        "restore_note": "direct",
+        "give_feedback": "direct",
+        "ask_question": "direct"
       }
     }
   }

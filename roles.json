@@ -45,7 +45,8 @@
       },
       "skills": [
         "obsidian",
-        "github"
+        "github",
+        "genai-weekly"
       ],
       "hidden": false
     },
@@ -63,7 +64,6 @@
           "hypa_shell",
           "hypa_find",
           "hypa_ls",
-          "subagents",
           "codemode",
           "web_search",
           "source_check",
@@ -193,7 +193,8 @@
           "mcp__atlassian__jira_get_issue",
           "mcp__humio__search",
           "mcp__humio__list_repos",
-          "mcp__snowflake__run_snowflake_query"
+          "mcp__snowflake__run_snowflake_query",
+          "codemode"
         ]
       },
       "skills": [
@@ -202,7 +203,8 @@
         "github",
         "obsidian",
         "snowflake",
-        "humio"
+        "humio",
+        "genai-weekly"
       ],
       "hidden": true
     },

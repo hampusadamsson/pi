@@ -5,7 +5,7 @@
   "mcpServers": {
     "snowflake": {
       "type": "http",
-      "url": "https://snowflake-agentic-poc-mcp.data.stage.lendo.dev/mcp",
+      "url": "https://snowflake-agentic-poc-mcp.data.lendo.dev/mcp",
       "enabled": true,
       "exposure": "hidden",
       "toolExposure": {
@@ -39,7 +39,7 @@
         "CONFLUENCE_USERNAME": "hampus.adamsson@group.clar.co",
         "JIRA_URL": "https://lendo-group.atlassian.net",
         "JIRA_USERNAME": "hampus.adamsson@group.clar.co",
-        "JIRA_PROJECTS_FILTER": "DATA"
+        "JIRA_PROJECTS_FILTER": "DATA,LGAI"
       },
       "exposure": "hidden",
       "toolExposure": {

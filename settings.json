@@ -9,8 +9,8 @@
     "npm:pi-sandbox",
     "git:github.com/kdejaeger/pi-scoped-models-extra-info",
     "npm:@vanillagreen/pi-session-manager",
-    "../../../../opt/homebrew/lib/node_modules/@jmfederico/pi-web/dist/pi-packages/relays",
-    "npm:@juicesharp/rpiv-todo"
+    "npm:@juicesharp/rpiv-todo",
+    "../../../../opt/homebrew/lib/node_modules/@jmfederico/pi-web/dist/pi-packages/relays"
   ],
   "theme": "my-theme",
   "hideThinkingBlock": true,
@@ -21,7 +21,5 @@
     "mermaid": "streaming"
   },
   "extensions": [],
-  "extensionChangelogVersions": {
-    "{\"source\":\"npm:pi-web-access\",\"scope\":\"user\"}": "0.47.0"
-  }
+  "extensionChangelogVersions": {}
 }

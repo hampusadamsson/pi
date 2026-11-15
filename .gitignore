@@ -25,3 +25,6 @@ npm/node_modules
 /sessions-subagents
 /sessions-subagents
 /paseo.txt
+
+# Generated model-discovery cache (rewritten by extensions/bifrost.ts saveCache)
+extensions/bifrost-models.json

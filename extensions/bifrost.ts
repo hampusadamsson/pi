@@ -153,12 +153,64 @@ const INCLUDE = (process.env.BIFROST_INCLUDE ?? "")
 // instantly at startup so Pi never blocks waiting on the network.
 const CACHE_PATH = join(dirname(new URL(import.meta.url).pathname), "bifrost-models.json");
 
-// Fallbacks for models where metadata is unavailable.
-// These must leave headroom for output: undersized maxTokens truncates
-// responses with a `length` finish reason (seen at 8.2k out).
-// Context default set very high (1M) so local models are never squeezed.
-const DEFAULT_CONTEXT_WINDOW = 1000000;
-const DEFAULT_MAX_TOKENS = 32768;
+// ------------------------------------------- tunables (env-overridable args)
+//
+// These apply only to models whose upstream returned no metadata. Bifrost's
+// /v1/models answers for a local upstream with just {id, owned_by}, so every
+// LM Studio model lands here and these values decide its context and budget.
+//
+// They must be sized for the *serving* context, not the model's maximum: an
+// oversized maxTokens starves the input side of the same window and truncates
+// output with a `length` finish reason (seen at 8.2k out on a 32k model).
+//
+// Override any of them without editing this file:
+//   BIFROST_DEFAULT_CONTEXT_WINDOW   32768
+//   BIFROST_DEFAULT_MAX_TOKENS       8192
+//   BIFROST_REASONING_PATTERN        think|reason|-r1|qwq|deepseek-r|qwen3
+//   BIFROST_SAMPLING                 {"temperature":0.7,"top_p":0.8,...}
+
+function envInt(name: string, fallback: number): number {
+	const raw = process.env[name];
+	if (raw === undefined || raw.trim() === "") return fallback;
+	const n = Number(raw);
+	if (!Number.isFinite(n) || n <= 0) {
+		console.warn(`[bifrost] ignoring invalid ${name}=${raw}; using ${fallback}`);
+		return fallback;
+	}
+	return Math.floor(n);
+}
+
+function envJson<T>(name: string, fallback: T): T {
+	const raw = process.env[name];
+	if (raw === undefined || raw.trim() === "") return fallback;
+	try {
+		return JSON.parse(raw) as T;
+	} catch {
+		console.warn(`[bifrost] ignoring invalid JSON in ${name}; using defaults`);
+		return fallback;
+	}
+}
+
+const DEFAULT_CONTEXT_WINDOW = envInt("BIFROST_DEFAULT_CONTEXT_WINDOW", 32768);
+const DEFAULT_MAX_TOKENS = envInt("BIFROST_DEFAULT_MAX_TOKENS", 8192);
+
+// Ids matching this are flagged as reasoning models. The thinking families
+// carry no `think`/`reason` in their id, so they must be named explicitly or
+// Pi treats a thinking model as plain and budgets output as if it never
+// reasons — the model then thinks anyway and gets cut off mid-<think>.
+const REASONING_PATTERN = new RegExp(
+	process.env.BIFROST_REASONING_PATTERN ?? "think|reason|-r1|qwq|deepseek-r|qwen3",
+	"i",
+);
+
+// Sampled values from the Qwen3.x model card for instruct/non-thinking mode.
+// Qwen3.x runs thinking ON by default; for the thinking-mode spec use
+// BIFROST_SAMPLING='{"temperature":1.0,"top_p":0.95,"top_k":20,"min_p":0}'.
+const DEFAULT_SAMPLING = envJson<Record<string, number>>("BIFROST_SAMPLING", {
+	temperature: 0.7,
+	top_p: 0.8,
+	presence_penalty: 1.5,
+});
 
 interface DiscoveredModel {
 	id: string;
@@ -219,19 +271,28 @@ function parseInfo(raw: unknown, id: string): ModelInfo {
 }
 
 function guessReasoning(id: string): boolean {
-	return /think|reason|-r1|qwq|deepseek-r/i.test(id);
+	return REASONING_PATTERN.test(id);
 }
 
 function toProviderModel(m: ModelInfo) {
+	// An upstream that reports nothing but an id is a local server behind
+	// Bifrost. Those get the conservative defaults and our sampling profile;
+	// cloud models that publish metadata keep their own values and are left
+	// alone so their provider-side defaults still apply.
+	const bare = m.cost === undefined && m.contextWindow === undefined && m.maxTokens === undefined;
 	return {
 		id: m.id,
 		name: m.name ?? m.id,
 		api: "openai-completions" as const,
-		reasoning: m.reasoning,
+		// Re-derive from the id instead of trusting the field: the on-disk
+		// discovery cache may predate a REASONING_PATTERN change and would
+		// otherwise keep a thinking model pinned to reasoning:false.
+		reasoning: guessReasoning(m.id) || m.reasoning,
 		input: ["text" as const],
 		cost: m.cost ?? { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
 		contextWindow: m.contextWindow ?? DEFAULT_CONTEXT_WINDOW,
 		maxTokens: m.maxTokens ?? DEFAULT_MAX_TOKENS,
+		...(bare ? { samplingParams: DEFAULT_SAMPLING } : {}),
 		compat: {
 			supportsDeveloperRole: false,
 			supportsReasoningEffort: false,

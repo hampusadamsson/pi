@@ -274,6 +274,33 @@ function guessReasoning(id: string): boolean {
 	return REASONING_PATTERN.test(id);
 }
 
+// Bifrost's OpenAI-compatible endpoint accepts `reasoning_effort` with the six
+// values below (it rejects anything else: "Supported values: none, minimal,
+// low, medium, high, xhigh"). pi's own ThinkingLevel set has seven:
+//
+//   off minimal low medium high xhigh max
+//
+// so the two vocabularies have to be translated. Without `thinkingLevelMap` pi
+// would send its own spelling through verbatim — `off` is not a valid effort and
+// is rejected, and `max` has no upstream equivalent. This map is what makes the
+// thinking-level picker in uipi actually do something.
+type PiThinkingLevel = "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
+
+const THINKING_LEVEL_MAP: Record<PiThinkingLevel, string | null> = {
+	// "off" is the one that matters most: pi maps its `off` level to
+	// `reasoning_effort` only through this map (an off request sends no effort at
+	// all), and "none" is how the upstream spells it.
+	off: "none",
+	minimal: "minimal",
+	low: "low",
+	medium: "medium",
+	high: "high",
+	xhigh: "xhigh",
+	// No upstream equivalent; collapse to the highest real level rather than
+	// advertising a level that would be rejected.
+	max: "xhigh",
+};
+
 function toProviderModel(m: ModelInfo) {
 	// An upstream that reports nothing but an id is a local server behind
 	// Bifrost. Those get the conservative defaults and our sampling profile;
@@ -295,9 +322,12 @@ function toProviderModel(m: ModelInfo) {
 		...(bare ? { samplingParams: DEFAULT_SAMPLING } : {}),
 		compat: {
 			supportsDeveloperRole: false,
-			supportsReasoningEffort: false,
+			// The endpoint takes `reasoning_effort`; leaving this false is what made
+			// the uipi thinking-level picker a no-op for every Bifrost model.
+			supportsReasoningEffort: true,
 			maxTokensField: "max_tokens" as const,
 		},
+		thinkingLevelMap: THINKING_LEVEL_MAP,
 	};
 }
 

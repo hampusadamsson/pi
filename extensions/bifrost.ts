@@ -286,7 +286,6 @@ function guessReasoning(id: string): boolean {
 // thinking-level picker in uipi actually do something.
 type PiThinkingLevel = "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
 
-// thinking-level wire check marker
 const THINKING_LEVEL_MAP: Record<PiThinkingLevel, string | null> = {
 	// "off" is the one that matters most: pi maps its `off` level to
 	// `reasoning_effort` only through this map (an off request sends no effort at

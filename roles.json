@@ -232,19 +232,6 @@
         "obsidian"
       ],
       "hidden": true
-    },
-    "verify2": {
-      "description": "final verify",
-      "model": "bifrost/opencode-go/deepseek-v4.1-flash",
-      "promptMode": "replace",
-      "systemPrompt": "x",
-      "tools": {
-        "allow": [
-          "hypa_ls"
-        ]
-      },
-      "skills": [],
-      "hidden": true
     }
   }
 }

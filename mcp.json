@@ -6,7 +6,7 @@
     "mysharedbrain": {
       "type": "http",
       "url": "https://mysharedbrain.haadpi.duckdns.org:9443/mcp/",
-      "description": "TLS: self-signed cert; pi/undici does not read caFile. Requires NODE_EXTRA_CA_CERTS=$HOME/.pi/agent/certs/mysharedbrain.pem (set in ~/.zshenv).",
+      "description": "TLS: LAN-only on 9443, cert signed by the private Homeserver Internal CA. pi/undici ignores caFile, so trust comes from NODE_EXTRA_CA_CERTS=$HOME/.pi/agent/certs/mysharedbrain.pem (set in ~/.zshenv), which now holds that CA root (10y) rather than a 90d leaf.",
       "enabled": true,
       "exposure": "hidden",
       "toolExposure": {

@@ -5,8 +5,8 @@
   "mcpServers": {
     "mysharedbrain": {
       "type": "http",
-      "url": "https://mysharedbrain.haadpi.duckdns.org:9443/mcp/",
-      "description": "TLS: LAN-only on 9443, cert signed by the private Homeserver Internal CA. pi/undici ignores caFile, so trust comes from NODE_EXTRA_CA_CERTS=$HOME/.pi/agent/certs/mysharedbrain.pem (set in ~/.zshenv), which now holds that CA root (10y) rather than a 90d leaf.",
+      "url": "http://192.168.1.156:8082/mcp/",
+      "description": "Plain HTTP on the LAN: the `mysharedbrain-plain` Traefik route (homeserver), node IP:8082, no TLS and no hostname, LAN-allowlisted. pi's MCP client is undici fetch, which has no caFile option, so trusting the private CA previously depended on NODE_EXTRA_CA_CERTS being set in every launch path. Plain HTTP removes the certificate from the picture rather than depending on that env var.",
       "enabled": true,
       "exposure": "hidden",
       "toolExposure": {

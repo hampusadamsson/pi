@@ -1,26 +1,14 @@
 [
 	{
-		"id": "gemma-4-12b-it-optiq",
-		"reasoning": false
+		"id": "lmstudio/qwen3.5-9b-mlx",
+		"reasoning": true
 	},
 	{
-		"id": "granite-4.1-8b",
-		"reasoning": false
+		"id": "lmstudio/qwen3.8-27b",
+		"reasoning": true
 	},
 	{
-		"id": "qwen3.5-9b-mlx",
-		"reasoning": false
-	},
-	{
-		"id": "qwen3.6-27b",
-		"reasoning": false
-	},
-	{
-		"id": "qwen3.8-27b",
-		"reasoning": false
-	},
-	{
-		"id": "text-embedding-nomic-embed-text-v1.5",
+		"id": "lmstudio/text-embedding-nomic-embed-text-v1.5",
 		"reasoning": false
 	},
 	{
@@ -87,19 +75,6 @@
 		"reasoning": false,
 		"contextWindow": 1048576,
 		"maxTokens": 65536
-	},
-	{
-		"id": "opencode-go/glm-5.2",
-		"name": "Glm 5.2",
-		"cost": {
-			"input": 1.4,
-			"output": 4.4,
-			"cacheRead": 0.26,
-			"cacheWrite": 0
-		},
-		"reasoning": false,
-		"contextWindow": 1000000,
-		"maxTokens": 131072
 	},
 	{
 		"id": "opencode-go/glm-5.3",
@@ -181,6 +156,10 @@
 	},
 	{
 		"id": "opencode-go/hy4",
+		"reasoning": false
+	},
+	{
+		"id": "opencode-go/hy4-flash-free",
 		"reasoning": false
 	},
 	{
@@ -343,7 +322,7 @@
 			"cacheRead": 0.04,
 			"cacheWrite": 0.5
 		},
-		"reasoning": false,
+		"reasoning": true,
 		"contextWindow": 1000000,
 		"maxTokens": 65536
 	},
@@ -356,7 +335,7 @@
 			"cacheRead": 0.016,
 			"cacheWrite": 0.19999999999999998
 		},
-		"reasoning": false,
+		"reasoning": true,
 		"contextWindow": 1000000,
 		"maxTokens": 131072
 	},
@@ -369,9 +348,13 @@
 			"cacheRead": 0.25,
 			"cacheWrite": 2.5
 		},
-		"reasoning": false,
+		"reasoning": true,
 		"contextWindow": 1000000,
 		"maxTokens": 131072
+	},
+	{
+		"id": "opencode-go/qwen4-max",
+		"reasoning": false
 	},
 	{
 		"id": "opencode-go/step-5-preview",

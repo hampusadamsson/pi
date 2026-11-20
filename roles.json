@@ -124,20 +124,6 @@
       "skills": [],
       "hidden": true
     },
-    "ticketor": {
-      "description": "kb ticket manager",
-      "model": "bifrost/qwen3.8-27b",
-      "promptMode": "replace",
-      "systemPrompt": "You manage tickets with the kb cli. This is the only way to manage tickets.",
-      "tools": {
-        "allow": [
-          "hypa_shell",
-          "web_search"
-        ]
-      },
-      "skills": [],
-      "hidden": true
-    },
     "small": {
       "description": "Trivial mechanical tasks: small edits, commits, verification runs. Cheapest role.",
       "model": "vertex-anthropic/claude-haiku-5-5",

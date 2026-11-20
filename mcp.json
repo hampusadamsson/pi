@@ -39,7 +39,7 @@
         "CONFLUENCE_USERNAME": "hampus.adamsson@group.clar.co",
         "JIRA_URL": "https://lendo-group.atlassian.net",
         "JIRA_USERNAME": "hampus.adamsson@group.clar.co",
-        "JIRA_PROJECTS_FILTER": "DATA,LGAI"
+        "JIRA_PROJECTS_FILTER": "DATA,LGAI,LSRE"
       },
       "exposure": "hidden",
       "toolExposure": {

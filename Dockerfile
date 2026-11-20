@@ -33,6 +33,10 @@ WORKDIR /root/.pi/agent
 # (e.g. npm:@hypabolic/pi-hypa, which registers hypa_* tools used by roles.json)
 # are installed into the image.
 COPY settings.json ./settings.json
+# models.json declares the bifrost OpenAI-compatible provider. Its apiKey is the
+# literal `$BIFROST_API_KEY`, so no credential is baked in, but the deployment
+# must supply that variable or bifrost models resolve to nothing.
+COPY models.json ./models.json
 # PI WEB ships its relay Pi package inside its npm package. Point the configured
 # local package path at the global install inside this image.
 RUN node -e "const fs=require('fs');const p='settings.json';const s=JSON.parse(fs.readFileSync(p,'utf8'));s.packages=s.packages.map(x=>x.replace('../../../../opt/homebrew/lib/node_modules/@jmfederico/pi-web/dist/pi-packages/relays','/usr/local/lib/node_modules/@jmfederico/pi-web/dist/pi-packages/relays'));fs.writeFileSync(p,JSON.stringify(s,null,2)+'\n')"

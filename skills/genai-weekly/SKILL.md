@@ -27,6 +27,7 @@ Follow these data-gathering steps in order using your available integrations:
 
 3. **GitHub (Repository/Org: "lendo-genai")**
    - Load the github skill first.
+   - Run `export GH_HOST=lendo-group.ghe.com` before any `gh` command.
    - List repos with `gh api --paginate orgs/lendo-genai/repos --jq '.[].name'` (not `gh repo list`).
    - For each project/repository inside "lendo-genai", gather commits from the past 7 days via `gh api repos/lendo-genai/{repo}/commits?since={ISO date}`.
    - Get merged PRs via `gh pr list --state merged --search 'merged:>={date}'`.
@@ -37,7 +38,7 @@ Follow these data-gathering steps in order using your available integrations:
 4. **Publish to Confluence** (runs last, after the summary has been generated)
    - Target: folder https://lendo-group.atlassian.net/wiki/spaces/LGA/folder/286687286 (space LGA, parent folder id 286687286). Do not guess any other page IDs.
    - The page title must equal the document title: `{YYYY-MM-DD} Gen AI Weekly Summary`. The published body starts at `## Brief` (no H1; the page title is the title). Do not put 'Data limits' in the body.
-   - Search the folder's children (`confluence_get_page_children` or CQL `ancestor = 286687286`) for a page with that exact title.
+   - Search the folder's children (use CQL `ancestor = 286687286` first; `confluence_get_page_children` returns 404 on folder IDs) for a page with that exact title.
    - If it exists, merge: update the page, keep existing content, add only new rows/info, no duplicate rows.
    - If not, create it as a child of the folder with the summary as body.
    - Return the page URL.
@@ -67,7 +68,7 @@ The page title is `{YYYY-MM-DD} Gen AI Weekly Summary`. The body has no H1 and s
 6. `{Topic} evaluation` (for a new Confluence evaluation page, e.g. `Claude Enterprise evaluation`)
 7. `Rollout and stakeholders`
 
-Extra topics become new rows at the end.
+Evaluation rows (6) go after `Platform planning docs (Confluence)` and before `Rollout and stakeholders`. Extra topics become new rows at the end. Keep this order in the table.
 
 **Details style.** 1-3 plain sentences per row. Put Jira keys in parentheses at the end of the sentence, e.g. `(LGAI-10, 11, 16–20)`. Mention open or blocked items briefly (e.g. waiting on LSRE-xxxx). The Brief is 2-3 sentences covering Jira and Confluence.
 

@@ -2,7 +2,10 @@
 auth.json
 mcp-oauth/
 models-store.json
-models.json
+# models.json is NOT a secret here: it holds `"apiKey": "$BIFROST_API_KEY"`,
+# a name pi resolves at request time, never a literal key. It is committed on
+# purpose so the ghcr.io/hampusadamsson/pi image (built from this branch) and
+# the uipi image both get the bifrost provider at all.
 
 # Cache
 cache/

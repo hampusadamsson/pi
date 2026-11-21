@@ -85,7 +85,7 @@ it is kept up to date. This skill is only the short version.
 | Path | What it is |
 |---|---|
 | `clusters/home-server/values.yaml` | **the whole cluster state** — app list, routes, homepage tiles |
-| `charts/<app>/` | one Helm chart per self-built app (13 of them) |
+| `charts/<app>/` | one Helm chart per self-built app (count and list: AGENTS.md "Counts at a glance") |
 | `apps/templates/` | root chart: renders Namespaces + child Applications + routes |
 | `bootstrap/root-app.yaml` | applied by hand once, ever. Never re-apply |
 | `AGENTS.md` | conventions, invariants, known exceptions |
@@ -110,6 +110,19 @@ If something breaks after the push: fix forward with another commit, or
 - No secrets in git. SealedSecrets or an `existingSecret` reference.
 - Pin image tags. No `:latest`.
 - Don't add `CreateNamespace=true` — the root chart owns namespaces.
+
+## Image policy — the registry allowlist
+
+The root chart renders a `ValidatingAdmissionPolicy` named
+`image-registry-allowlist` (`apps/templates/image-policy.yaml`). Its allowlist is
+`imagePolicy.allowedRegistries` in `clusters/home-server/values.yaml`: ghcr.io,
+docker.io, docker.all-hands.dev, quay.io, registry.k8s.io, public.ecr.aws,
+mcr.microsoft.com.
+
+It runs in **Warn + Audit** mode today — nothing is blocked yet. An image from an
+unlisted registry gets flagged in API warnings and audit annotations, and starts
+failing the moment the policy moves to Deny. Adding a registry is a separate
+reviewed change, not a drive-by edit.
 
 ## Reading the cluster (cheat sheet)
 
@@ -143,6 +156,25 @@ Namespaces you'll see: `argocd`, `traefik`, `cert-manager`, `sealed-secrets`,
 The Homepage UI (`homepage.haadpi.duckdns.org:9443`) is the service directory —
 every exposed service has a tile. If something is reachable but has no tile,
 that's an incomplete change, not a cosmetic one.
+
+## Trap — counting config from `kubectl get cm -o yaml`
+
+Asked how many services a ConfigMap described,
+`kubectl -n <ns> get cm <name> -o yaml | grep -c 'href: https://'` returned 22.
+The true number was 21.
+
+Cause: `-o yaml` also echoes the `kubectl.kubernetes.io/last-applied-configuration`
+annotation, which holds a serialized copy of the whole `data` block. Every match
+is counted twice, plus one extra for the annotation itself.
+
+Read the one data key you care about instead:
+
+```bash
+kubectl -n <ns> get cm <name> -o jsonpath='{.data.services\.yaml}' | grep -c 'href: https://'
+```
+
+Generalised: for any "how many X are in this config" question, read the single
+data key with jsonpath — never `-o yaml`.
 
 ## Found drift? Live cluster ≠ git
 

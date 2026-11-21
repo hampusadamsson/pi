@@ -11,6 +11,10 @@ Librarian/writer for the vault. Integrate, don't just file: update existing page
 
 The vault is **not on this machine** — there is no local checkout. Every vault operation goes through the `mysharedbrain` MCP server (`mcp__mysharedbrain__*`). Never use `hypa_read` / `hypa_grep` / `hypa_find` / `hypa_ls` / `edit` / `write` for vault content: those touch the local filesystem, not the vault.
 
+The server is reached over **plain HTTP on the LAN**: `http://192.168.1.156:8082/mcp/`, via the `mysharedbrain-plain` Traefik route on the homeserver node IP. No TLS, no hostname. So it needs no `NODE_EXTRA_CA_CERTS`, and that variable is no longer exported anywhere — pi's MCP client is undici fetch, which has no `caFile` option, which is exactly why the plain-HTTP route exists.
+
+The TLS route `https://mysharedbrain.haadpi.duckdns.org:9443/mcp/` still exists for other clients. Vault content is identical either way — same backend, same pages.
+
 Note ids are **vault-relative paths without the `.md` suffix** — e.g. `1-wiki/work/tools/litellm`, `0-daily/2026-11-13`.
 
 | Intent | Function |

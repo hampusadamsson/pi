@@ -85,6 +85,13 @@ argocd app resources argocd/<app>
 
 For "is ArgoCD right?", trust `app diff` over `status` — see the trap below.
 
+**Forcing a refresh.** After a push, the controller may keep the old `revision`
+for a poll interval. `argocd app get argocd/<app> --refresh` makes it compare now
+— allowed, it writes only ArgoCD status. Do **not** reach for
+`kubectl patch application ... refresh`: kubectl is read-only in this cluster
+(see the kubectl skill), and the wrapper exists precisely to keep writes out of
+the CLI.
+
 **Reading status in bulk** — do not loop `app get` per app if you can avoid it;
 `--core` reads are cheap but N calls still cost N round trips:
 
@@ -116,6 +123,28 @@ Sequence that surfaced it (2026-11-11):
 proof. `argocd app diff <app>` is. If diff is non-empty while status says
 Synced, that's a genuine ArgoCD/selfHeal defect worth reporting — not something
 to fix with the CLI.
+
+## Trap — "Healthy" does not mean the app works
+
+`openhands` sat `Synced / Healthy` for 54 days while it could not start a single
+conversation. Three defects were live at once:
+
+1. no sandbox backend — `RUNTIME` unset, so it tried to reach a `docker.sock`
+   that does not exist
+2. an unresolvable LLM model id
+3. a PVC mounted at a path the app never read
+
+Why the probes lied: liveness/readiness were `httpGet: /`, and the app's SPA
+answers 200 for **every** path. `/health`, `/ready`, `/alive` were hardcoded
+static 200s too. Nothing a probe could reach reflected whether the app actually
+functioned.
+
+**So**: `Synced/Healthy` speaks to manifests and process liveness, not behaviour.
+When the user says "X doesn't work" and ArgoCD says Healthy, look for a probe
+that cannot fail, then exercise a real endpoint — exec/curl inside the pod
+against the API the UI calls, not `/`. Prefer a readiness probe that touches real
+functionality: the fix was probing `GET /api/v1/sandboxes/search`, the route that
+actually walks through the broken subsystem.
 
 ## Reporting drift
 

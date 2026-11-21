@@ -4,7 +4,19 @@ Conventions for repos under `github.com/hampusadamsson`. Host is `github.com` �
 
 ## Protected branches
 
-`main`, `master`, `develop` are long-lived. `main` or `master` (whichever the repo uses) is the core branch. Never commit or push to them directly, and never force-push them. Check with `gh repo view hampusadamsson/<repo> --json defaultBranchRef`.
+`main`, `master`, `develop` are long-lived. `main` or `master` (whichever the repo uses) is the core branch. Never force-push them.
+
+Before committing, check how the repo actually takes changes:
+
+```bash
+gh repo view hampusadamsson/<repo> --json defaultBranchRef
+git log --oneline --merges -5
+```
+
+- **Merge/squash commits from PRs, or branch protection on:** branch `<type>/<desc>` + draft PR, the flow below.
+- **Every change lands directly on the default branch, no merge commits:** committing to the default branch matches the repo's practice. `homeserver` is this case. Say so in one line when you report it — do not choose silently.
+- **Genuinely unclear:** ask. Do not pick for the user.
+- **Repo with a non-default live branch:** go to that branch. The `pi` config repo uses `home`, not `main` — check `git branch -vv` and the repo's deploy config first.
 
 ## Branch names
 
@@ -44,12 +56,12 @@ If the repo has `.github/pull_request_template.md`, use it instead.
 
 ## Create-PR flow (write, needs user confirmation)
 
-This is the only write flow in this skill. Show the plan and get an explicit yes before steps 3 to 5.
+This is the only write flow in this skill. Used when the decision above says branch + PR. Show the plan and get an explicit yes before steps 3 to 5.
 
-1. **Check state:** `git status`, `git branch --show-current`, `gh repo view --json defaultBranchRef`. Stop if on a protected branch with uncommitted work.
+1. **Check state:** `git status`, `git branch --show-current`, `gh repo view --json defaultBranchRef`. Stop if on a protected branch with uncommitted work that the decision above did not clear for a direct commit.
 2. **Branch:** `git switch -c <type>/<desc>` from an up-to-date default branch. Validate the name against the rules above.
 3. **Commit:** stage only the intended files. Message follows the format above.
-4. **Push:** `git push -u origin <branch>`. If rewriting history on the feature branch, use `--force-with-lease` only. Never use `--force`, and never push to a protected branch.
+4. **Push:** `git push -u origin <branch>`. If rewriting history on the feature branch, use `--force-with-lease` only. Never use `--force`, and in this flow push `<branch>` only — never a long-lived branch.
 5. **Open PR as draft:**
    ```bash
    gh pr create --draft --base <main|master> \

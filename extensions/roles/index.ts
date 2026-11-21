@@ -533,18 +533,60 @@ export default function (pi: ExtensionAPI) {
 		}
 
 		const baseDir = config.baseDirs[activeRole] ?? ctx.cwd;
-		let prompt = filterSkills(event.systemPrompt, role.skills);
-
 		const roleText = rolePromptText(role, baseDir, ctx.cwd);
-		if (roleText) {
-			prompt =
-				role.promptMode === "replace"
-					? roleText
-					: `${prompt}\n\n# Active role: ${activeRole}\n\n${roleText}`;
+
+		// Mutate the structured options instead of returning `systemPrompt`. A returned
+		// prompt becomes `forceSystemPrompt`, which pi swaps in only at request time
+		// (transformContext), so the streamed and persisted system message keeps the
+		// *base* prompt and the role is invisible to `-p`, JSON events and session
+		// files. Mutating here also keeps pi's section diff — and the prompt cache —
+		// stable across turns.
+		const options = (
+			event as unknown as { systemPromptOptions?: Record<string, unknown> }
+		).systemPromptOptions as
+			| {
+					customPrompt?: string;
+					appendSystemPrompt?: string;
+					contextFiles?: unknown[];
+					skills?: unknown[];
+					sections?: Record<string, string>;
+			  }
+			| undefined;
+
+		if (!options) {
+			// No structured prompt (older pi): keep the forced-prompt path.
+			let prompt = filterSkills(event.systemPrompt, role.skills);
+			if (roleText) {
+				prompt =
+					role.promptMode === "replace"
+						? roleText
+						: `${prompt}\n\n# Active role: ${activeRole}\n\n${roleText}`;
+			}
+			return { systemPrompt: prompt + readContextFiles(role, baseDir, ctx.cwd) };
 		}
 
-		prompt += readContextFiles(role, baseDir, ctx.cwd);
-		return { systemPrompt: prompt };
+		const context = readContextFiles(role, baseDir, ctx.cwd);
+
+		if (roleText && role.promptMode === "replace") {
+			// Replace means replace: the role text is the whole prompt. `customPrompt`
+			// drops pi's default preamble/tools/rules/docs, and the other sources are
+			// cleared so nothing leaks in. pi always appends the cwd section.
+			options.customPrompt = roleText + context;
+			options.appendSystemPrompt = "";
+			options.contextFiles = [];
+			options.skills = [];
+			if (options.sections) {
+				for (const name of Object.keys(options.sections)) delete options.sections[name];
+			}
+			return;
+		}
+
+		if (roleText) {
+			const appended = `# Active role: ${activeRole}\n\n${roleText}${context}`;
+			options.appendSystemPrompt = options.appendSystemPrompt
+				? `${options.appendSystemPrompt}\n\n${appended}`
+				: appended;
+		}
 	});
 
 	// -------------------------------------------------------------- commands

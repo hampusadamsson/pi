@@ -69,7 +69,9 @@ Globs support `*` only.
 - Switching is refused while the agent is busy.
 - `skills` filters the `<available_skills>` block in the system prompt. It does **not** hide `/skill:<name>` slash commands — pi has no runtime API for that.
 - Command-level shell restrictions are a separate extension, `shell-policy`; this file supplies its config.
-- `promptMode: "replace"` drops pi's base prompt for that turn, including built-in tool guidelines.
+- `promptMode: "replace"` drops pi's base prompt, including built-in tool guidelines: the role text becomes the whole prompt (pi still appends its `cwd` section and always-on handshake sections such as `subagents`).
+- `promptMode: "append"` (default) keeps pi's base prompt and appends `# Active role: <name>` plus the role text to the `addendum` section.
+- The role prompt is applied by mutating pi's structured `systemPromptOptions` (`customPrompt` / `appendSystemPrompt`), not by returning `systemPrompt`. A returned system prompt becomes pi's `forceSystemPrompt`, which is swapped in only at request time — the streamed and persisted system message would then still show the *base* prompt, hiding the role from `-p`, JSON events and session files. Mutating the options keeps what pi builds, streams and persists equal to what the model sees, and keeps the section diff (and prompt cache) stable across turns.
 - Model failures (unknown model / missing API key) warn and keep the current model; everything else in the role still applies.
 
 ## Dev

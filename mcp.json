@@ -32,6 +32,25 @@
         "give_feedback": "direct",
         "ask_question": "direct"
       }
+    },
+    "kb": {
+      "type": "http",
+      "url": "http://192.168.1.156:8083/mcp",
+      "description": "kb kanban MCP over plain HTTP on the LAN: the `kb-plain` Traefik route (homeserver), node IP:8083, no TLS and no hostname, LAN-allowlisted. Same reasoning as mysharedbrain: pi MCPs over undici fetch with no caFile option, so plain HTTP avoids depending on NODE_EXTRA_CA_CERTS. Stateless POST /mcp on the `kb web` process -- no sessions, board is whatever kb web serves.",
+      "enabled": true,
+      "exposure": "hidden",
+      "toolExposure": {
+        "kb_boards": "direct",
+        "kb_search": "direct",
+        "kb_read": "direct",
+        "kb_create": "direct",
+        "kb_update": "direct",
+        "kb_move": "direct",
+        "kb_comment": "direct",
+        "kb_validate": "direct",
+        "kb_fix": "direct",
+        "kb_automations": "direct"
+      }
     }
   }
 }

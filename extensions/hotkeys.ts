@@ -520,6 +520,9 @@ function firstNonBlank(line: string): number {
 	return m ? m.index : 0;
 }
 
+/** pi-tui's FAKE_CURSOR_START/FAKE_CURSOR_END around the cursor cell (not exported). */
+const FAKE_CURSOR = /\x1b_pi:fc\x07([^\x1b]*)\x1b_pi:\/fc\x07/;
+
 /** Vim-style modal input editor. INSERT by default; esc → NORMAL; v → VISUAL. */
 class VimEditor extends CustomEditor {
 	mode: VimMode = "insert";
@@ -1103,12 +1106,18 @@ class VimEditor extends CustomEditor {
 		if (this.mode !== "insert") return lines;
 		// Underline the cursor char instead of swapping in ▏: terminal cursor is a
 		// fake reverse-video cell, so a bar glyph would hide the char underneath.
+		//
+		// The editor emits the cell as pi-tui's FAKE_CURSOR_START + char +
+		// FAKE_CURSOR_END (zero-width APC markers); only TUI.resolveFakeCursors()
+		// turns them into SGR 7/27, after this render returns. Matching the
+		// resolved SGR form here never fired. The CURSOR_MARKER before the cell is
+		// kept so cursor positioning still works.
 		return lines.map((line) => {
-			const m = line.match(/\x1b\[7m([^\x1b]*)\x1b\[0m/);
+			const m = FAKE_CURSOR.exec(line);
 			if (!m) return line;
 			const ch = m[1] || " ";
 			const colored = uiCtx?.ui.theme ? uiCtx.ui.theme.fg("accent", ch) : ch;
-			return line.replace(/\x1b\[7m([^\x1b]*)\x1b\[0m/, `\x1b[4m${colored}\x1b[24m`);
+			return line.replace(FAKE_CURSOR, `\x1b[4m${colored}\x1b[24m`);
 		});
 	}
 

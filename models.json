@@ -14,7 +14,7 @@
 			},
 			"models": [
 				{
-					"id": "lmstudio/qwen3.5-9b-mlx",
+					"id": "lmstudio/mlx-community/Qwen3.5-9B-MLX-4bit",
 					"reasoning": true,
 					"input": [
 						"text"
@@ -43,7 +43,7 @@
 					}
 				},
 				{
-					"id": "lmstudio/qwen3.8-27b",
+					"id": "lmstudio/mlx-community/Qwen3.8-27B-4bit",
 					"reasoning": true,
 					"input": [
 						"text"

@@ -1,7 +1,7 @@
 {
   "defaultModel": "opencode-go/deepseek-v4.1-flash",
   "defaultProvider": "bifrost",
-  "lastChangelogVersion": "1.5.2",
+  "lastChangelogVersion": "1.6.0",
   "packages": [
     "npm:pi-zentui",
     "npm:@hypabolic/pi-hypa",

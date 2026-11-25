@@ -28,3 +28,5 @@ npm/node_modules
 /sessions-subagents
 /sessions-subagents
 /paseo.txt
+/certs/
+/models.json.bak.*

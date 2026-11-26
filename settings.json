@@ -1,7 +1,7 @@
 {
-  "defaultModel": "claude-sonnet-5-5",
-  "defaultProvider": "vertex-anthropic",
-  "lastChangelogVersion": "1.5.2",
+  "defaultModel": "opencode-go/deepseek-v4.1-flash",
+  "defaultProvider": "bifrost",
+  "lastChangelogVersion": "1.6.0",
   "packages": [
     "npm:pi-zentui",
     "npm:@hypabolic/pi-hypa",

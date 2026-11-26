@@ -6,12 +6,12 @@
     "allowLocalBinding": true,
     "allowAllUnixSockets": true,
     "allowedDomains": [
+      "localhost",
+      "127.0.0.1",
+      "*.npmjs.org",
       "*.github.com",
-      "*.ghe.com",
-      "*.atlassian.net",
-      "*.atlassian.com",
-      "*.lendo.dev",
-      "*.lendo.se"
+      "raw.githubusercontent.com",
+      "*.pypi.org"
     ],
     "deniedDomains": []
   },
@@ -25,16 +25,14 @@
     "allowRead": [
       ".",
       "~/.config",
+      "~/.cache",
       "~/.local",
-      "/Users/hampus.adamsson/syncthing/default/obsidian/work/0-daily/",
-      "/Users/hampus.adamsson/syncthing/default/obsidian/work/1-wiki/",
       "Library"
     ],
     "allowWrite": [
       ".",
-      "/Users/hampus.adamsson/syncthing/default/obsidian/work/0-daily/",
-      "/Users/hampus.adamsson/syncthing/default/obsidian/work/1-wiki/",
-      "/tmp"
+      "/tmp",
+      "~/.cache"
     ],
     "denyWrite": [
       ".env",

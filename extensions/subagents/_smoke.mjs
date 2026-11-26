@@ -12,6 +12,8 @@
  */
 
 import { createJiti } from "/opt/homebrew/lib/node_modules/@earendil-works/pi-coding-agent/node_modules/jiti/lib/jiti.mjs";
+import { existsSync } from "node:fs";
+import { SessionManager } from "/opt/homebrew/lib/node_modules/@earendil-works/pi-coding-agent/dist/index.js";
 
 const PKG = "/opt/homebrew/lib/node_modules/@earendil-works/pi-coding-agent";
 const jiti = createJiti(import.meta.url, {
@@ -208,6 +210,28 @@ if (!runId) {
 	console.log(`wait took ${Math.round((Date.now() - started) / 1000)}s | isError: ${waitErr}`);
 	console.log("--- wait output ---\n" + waitText);
 	check("(d) wait text contains OK", /\bOK\b/.test(waitText), waitText.includes("OK") ? "found OK" : "no OK in output");
+
+	// ------------------------------------------------------------ (f) persistence
+
+	// Children persist real pi sessions, but outside the normal sessions/ tree, so
+	// they must never surface in the session picker (SessionManager.list/listAll).
+	const sessionLine = waitText.split("\n").find((l) => l.startsWith("session: "));
+	const sessionFilePath = sessionLine?.slice("session: ".length).trim();
+	check("(f) wait output reports the session path", !!sessionFilePath && existsSync(sessionFilePath), sessionFilePath ?? "none");
+
+	if (sessionFilePath) {
+		const all = await SessionManager.listAll();
+		const cwdList = await SessionManager.list(ctx.cwd);
+		const leaked = [...all, ...cwdList].some((s) => s.path === sessionFilePath);
+		check("(f) subagent session is hidden from list/listAll", !leaked, `listAll=${all.length} list(cwd)=${cwdList.length}`);
+
+		const reopened = SessionManager.open(sessionFilePath);
+		check(
+			"(f) session reopens and keeps the run id",
+			reopened.getSessionId() === runId && reopened.getEntries().length > 0,
+			`id=${reopened.getSessionId()} entries=${reopened.getEntries().length}`,
+		);
+	}
 }
 
 // ---------------------------------------------------------------- cleanup + summary

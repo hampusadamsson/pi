@@ -108,7 +108,7 @@
     },
     "local": {
       "description": "Basic edit tasks on local model (Mac mini)",
-      "model": "bifrost/lmstudio/qwen3.8-27b",
+      "model": "bifrost/lmstudio/mlx-community/Qwen3.8-27B-4bit",
       "promptMode": "replace",
       "systemPrompt": "You are an agent working on a task.",
       "tools": {

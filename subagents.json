@@ -9,7 +9,5 @@
   },
   "maxConcurrent": 15,
   "outputCapKb": 90,
-  "persistSessions": true,
-  "sessionDir": "~/.pi/agent/sessions-subagents",
   "piBin": "/opt/homebrew/bin/pi"
 }

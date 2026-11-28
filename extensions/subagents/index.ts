@@ -44,24 +44,12 @@
  *     "outputCapKb": 50,               // final output cap returned to the model
  *     "mode": "rpc",                  // child transport: "rpc" (JSONL over stdin+stdout, default)
  *                                      // or "json" (legacy: task as trailing arg, stdout-only)
- *     "persistSessions": true,        // persist each child as a real pi session on disk
- *     "sessionDir": "~/.pi/agent/sessions-subagents",  // root for those sessions (default shown)
  *     "piBin": "/opt/homebrew/bin/pi" // optional: explicit pi CLI to spawn
  *   }
  *
- * Sessions: children are spawned with `--session-dir <sessionDir>/<encoded-cwd>
- * --session-id <run.id>` instead of `--no-session`, so every subagent run is a
- * normal, replayable pi session (`pi --session <path>`) named after its run id.
- * They are kept *outside* `sessions/` on purpose: `SessionManager.list`/`listAll`
- * only scan `sessions/<encoded-cwd>/*.jsonl` and one level of subdirectories, so
- * subagent sessions never appear in `/resume`, `--continue` or the session
- * picker — hiding is structural, not a flag someone can forget to honour. The
- * directory is configurable; `persistSessions: false` restores `--no-session`
- * (transcripts then exist only in the parent's memory).
- *
- * Transport: children run `pi --mode rpc --session-dir <dir> --session-id <id>
- * --role <role>`; the task is written as a single
- * `{"id":"1","type":"prompt","message":<task>}` line to the child's stdin. stdout is parsed line-by-line: `message_end` supplies the
+ * Transport: children run `pi --mode rpc --no-session --role <role>`; the task is
+ * written as a single `{"id":"1","type":"prompt","message":<task>}` line to
+ * the child's stdin. stdout is parsed line-by-line: `message_end` supplies the
  * transcript, `response` with `success:false` supplies an error, and
  * `extension_ui_request` dialogs (select/confirm/input/editor) are always
  * answered with `{"type":"extension_ui_response","id":...,"cancelled":true}`
@@ -96,8 +84,7 @@
 
 import { spawn, type ChildProcess } from "node:child_process";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
-import { homedir } from "node:os";
-import { join, resolve } from "node:path";
+import { join } from "node:path";
 import type { AgentToolResult } from "@earendil-works/pi-agent-core";
 import { StringEnum, type Message } from "@earendil-works/pi-ai";
 import { Type } from "typebox";
@@ -113,10 +100,6 @@ import { Text } from "@earendil-works/pi-tui";
 
 interface SubagentsConfig {
 	timeoutSeconds: number;
-	/** Root dir for persisted child sessions (default: `<agentDir>/sessions-subagents`). */
-	sessionDir: string;
-	/** Persist children as pi sessions; false restores `--no-session`. */
-	persistSessions: boolean;
 	/** Kill a run that produced no output for this many seconds; 0 (or negative) disables. */
 	idleTimeoutSeconds: number;
 	roleTimeouts: Record<string, number>;
@@ -133,27 +116,8 @@ interface SubagentsConfig {
 	piBin?: string;
 }
 
-/** `~` expansion for config paths (a literal `~/x` is not a valid cwd). */
-function expandTilde(path: string): string {
-	if (path === "~") return homedir();
-	if (path.startsWith("~/") || path.startsWith("~\\")) return join(homedir(), path.slice(2));
-	return path;
-}
-
-/**
- * Child sessions live next to (not inside) the normal session root: pi's
- * `SessionManager.list` reads `sessions/<encoded-cwd>/*.jsonl` and `listAll`
- * scans exactly one level below `sessions/`, so anything stored here can never
- * surface in `/resume`, `--continue` or the session picker.
- */
-function defaultSessionDir(): string {
-	return join(getAgentDir(), "sessions-subagents");
-}
-
 const DEFAULT_CONFIG: SubagentsConfig = {
 	timeoutSeconds: 600,
-	sessionDir: defaultSessionDir(),
-	persistSessions: true,
 	idleTimeoutSeconds: 300,
 	roleTimeouts: {},
 	maxTurns: 0,
@@ -171,11 +135,6 @@ function loadConfig(): SubagentsConfig {
 		const raw = JSON.parse(readFileSync(path, "utf8")) as Partial<SubagentsConfig>;
 		return {
 			timeoutSeconds: raw.timeoutSeconds ?? DEFAULT_CONFIG.timeoutSeconds,
-			sessionDir:
-				typeof raw.sessionDir === "string" && raw.sessionDir.trim()
-					? expandTilde(raw.sessionDir.trim())
-					: DEFAULT_CONFIG.sessionDir,
-			persistSessions: raw.persistSessions === false ? false : DEFAULT_CONFIG.persistSessions,
 			idleTimeoutSeconds: raw.idleTimeoutSeconds ?? DEFAULT_CONFIG.idleTimeoutSeconds,
 			roleTimeouts: raw.roleTimeouts ?? {},
 			maxTurns:
@@ -345,10 +304,6 @@ interface Run {
 	wrapUpSent?: boolean;
 	/** Effective turn cap for this run (0 = unlimited); rpc transport only. */
 	maxTurns?: number;
-	/** Directory holding this run's persisted session file (undefined when not persisting). */
-	sessionDir?: string;
-	/** Resolved session file path, cached once the child has created it. */
-	sessionFile?: string;
 }
 
 let config = loadConfig();
@@ -539,30 +494,6 @@ function effectiveMaxTurns(role: string): number {
 	return typeof cap === "number" && Number.isFinite(cap) && cap > 0 ? Math.floor(cap) : 0;
 }
 
-/** pi's per-project session directory name for a cwd (`--Users-me-proj--`). */
-function encodeProjectDir(cwd: string): string {
-	return `--${resolve(cwd).replace(/^[/\\]/, "").replace(/[/\\:]/g, "-")}--`;
-}
-
-/** Where a run's session file lives, if it is being persisted. */
-function sessionPath(run: Run): string | undefined {
-	if (run.sessionFile) return run.sessionFile;
-	if (!run.sessionDir) return undefined;
-	const suffix = `_${run.id}.jsonl`;
-	try {
-		const file = readdirSync(run.sessionDir).find((f) => f.endsWith(suffix));
-		if (!file) return undefined;
-		// Cache it: `list`/`status` render in the hot path and the file name never changes.
-		run.sessionFile = join(run.sessionDir, file);
-		return run.sessionFile;
-	} catch {
-		return undefined;
-	}
-}
-
-/** pi warns on every new `--session-id`; the id is new by construction, so this is noise. */
-const NO_PROJECT_SESSION_WARNING = /^Warning: No project session found with id '[^']*'; creating a new session with that id\.\s*$/gm;
-
 function launchRun(run: Run): void {
 	run.state = "running";
 	// The deadline was armed when the run was created, so a queued run is bounded too;
@@ -585,19 +516,7 @@ function launchRun(run: Run): void {
 
 	// pi's MCP extension auto-activates `direct` MCP tools regardless of the roles
 	// extension's filter; drop them at the CLI level when the role doesn't allow them.
-	const args = ["--mode", transport];
-	if (config.persistSessions) {
-		// A real session per run, kept outside `sessions/` so it never shows up in
-		// /resume, --continue or the picker (structural hiding, not a flag). The run
-		// id doubles as the session id: the file is `<ts>_<run.id>.jsonl` and it can be
-		// reopened with `pi --session <path>`.
-		run.sessionDir = join(config.sessionDir, encodeProjectDir(run.cwd));
-		args.push("--session-dir", run.sessionDir, "--session-id", run.id);
-	} else {
-		run.sessionDir = undefined;
-		args.push("--no-session");
-	}
-	args.push("--role", run.role);
+	const args = ["--mode", transport, "--no-session", "--role", run.role];
 	if (roleExcludesMcp(run.role)) args.push("--exclude-tools", "mcp__*");
 	// rpc mode takes the task on stdin; json mode takes it as the trailing argument.
 	if (transport === "json") args.push("--", run.task);
@@ -791,11 +710,7 @@ function launchRun(run: Run): void {
 		// Keep the newest stderr instead of locking on the first chunk: node prints a
 		// bare `node:internal/modules/esm/resolve:241` header before the actual
 		// `Error [ERR_MODULE_NOT_FOUND]: Cannot find module '...'` reason.
-		// `--session-id` always warns that no *project* session has this id yet — the
-		// id is new by construction, so drop that line rather than let it head a
-		// real failure message later. Strip from the accumulated tail: the warning can
-		// land split across two chunks.
-		run.stderrTail = (run.stderrTail + text).slice(-4000).replace(NO_PROJECT_SESSION_WARNING, "");
+		run.stderrTail = (run.stderrTail + text).slice(-4000);
 		// stderr is not itself a failure: warnings land here on successful runs too, so
 		// the verdict decides (see the `close` handler) whether it becomes errorMessage.
 	});
@@ -949,11 +864,6 @@ function describeRun(run: Run, includeOutput: boolean, tailLines: number): strin
 			lines.push(`output: ${isActive(run) ? "(still running)" : "(none)"}`);
 		}
 	}
-	// Point at the persisted transcript so a finished run can be replayed/inspected
-	// directly (`pi --session <path>`), even after a SIGKILL where the parent's
-	// in-memory transcript is incomplete.
-	const session = sessionPath(run);
-	if (session) lines.push(`session: ${session}`);
 	return lines.join("\n");
 }
 
@@ -987,13 +897,11 @@ function messageText(msg: Message): string {
 
 function lastMessages(run: Run, count = 5): string {
 	const tail = run.messages.slice(-count);
-	const session = sessionPath(run);
-	const footer = session ? `\n\nsession: ${session}` : "";
-	if (tail.length === 0) return `${run.id}: no messages yet.${footer}`;
+	if (tail.length === 0) return `${run.id}: no messages yet.`;
 	const body = tail
 		.map((m) => `[${m.role}] ${messageText(m).slice(0, 2000) || "(empty)"}`)
 		.join("\n\n");
-	return `${statusLine(run)}\n\n${body}${footer}`;
+	return `${statusLine(run)}\n\n${body}`;
 }
 
 // ---------------------------------------------------------------- tool
@@ -1079,7 +987,6 @@ export default function (pi: ExtensionAPI) {
 			"spawn is non-blocking: it returns a run id immediately; the child runs in its own session with the role's model, tools, skills and system prompt.",
 			"Manage runs with status (one run, needs id), list (all runs), wait (needs id; block until that run is done), stop (kill).",
 			"Runs have deadlines (per-spawn timeoutSeconds > roleTimeouts > timeoutSeconds); a timed-out run is killed and its partial output returned.",
-			"Each run is persisted as a real pi session (default root ~/.pi/agent/sessions-subagents, outside the normal sessions/ tree so it never appears in /resume or the session picker); status/wait print the file path, reopen it with `pi --session <path>`.",
 			"rpc runs are also capped by turn count (roleMaxTurns/maxTurns in subagents.json, 0 = unlimited): the child is steered to wrap up shortly before the cap and killed (state turn_limited) at it.",
 			"If a subagent is blocked, tell it to end its reply with `NEEDS-CLARIFICATION: <question>`; such a run is flagged in its result so you do not mistake it for finished work.",
 		].join(" "),

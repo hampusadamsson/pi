@@ -3,53 +3,61 @@
     "mcpFooterStatus": "off"
   },
   "mcpServers": {
-    "mysharedbrain": {
+    "snowflake": {
       "type": "http",
-      "url": "http://192.168.1.156:8082/mcp/",
-      "description": "Plain HTTP on the LAN: the `mysharedbrain-plain` Traefik route (homeserver), node IP:8082, no TLS and no hostname, LAN-allowlisted. pi's MCP client is undici fetch, which has no caFile option, so trusting the private CA previously depended on NODE_EXTRA_CA_CERTS being set in every launch path. Plain HTTP removes the certificate from the picture rather than depending on that env var.",
+      "url": "https://snowflake-agentic-poc-mcp.data.lendo.dev/mcp",
       "enabled": true,
       "exposure": "hidden",
       "toolExposure": {
-        "read_note": "direct",
-        "read_notes": "direct",
-        "list_notes": "direct",
-        "list_directory": "direct",
-        "get_frontmatter": "direct",
-        "search_by_tag": "direct",
-        "search_notes": "direct",
-        "note_history": "direct",
-        "get_backlinks": "direct",
-        "get_outgoing": "direct",
-        "recent_changes": "direct",
-        "create_note": "direct",
-        "update_note": "direct",
-        "append_note": "direct",
-        "patch_note": "direct",
-        "set_frontmatter": "direct",
-        "move_note": "direct",
-        "delete_note": "direct",
-        "restore_note": "direct",
-        "give_feedback": "direct",
-        "ask_question": "direct"
+        "run_snowflake_query": "deferred"
       }
     },
-    "kb": {
-      "type": "http",
-      "url": "http://192.168.1.156:8083/mcp",
-      "description": "kb kanban MCP over plain HTTP on the LAN: the `kb-plain` Traefik route (homeserver), node IP:8083, no TLS and no hostname, LAN-allowlisted. Same reasoning as mysharedbrain: pi MCPs over undici fetch with no caFile option, so plain HTTP avoids depending on NODE_EXTRA_CA_CERTS. Stateless POST /mcp on the `kb web` process -- no sessions, board is whatever kb web serves.",
-      "enabled": true,
+    "humio": {
+      "command": "uvx",
+      "args": [
+        "--from",
+        "git+https://lendo-group.ghe.com/lendo-data-ml/humio-mcp.git@1.0.0",
+        "humio-mcp"
+      ],
+      "env": {
+        "HUMIO_TOKEN": "${HUMIO_TOKEN}",
+        "HUMIO_ENDPOINT": "https://lendo.logscale.eu-1.crowdstrike.com"
+      },
       "exposure": "hidden",
       "toolExposure": {
-        "kb_boards": "direct",
-        "kb_search": "direct",
-        "kb_read": "direct",
-        "kb_create": "direct",
-        "kb_update": "direct",
-        "kb_move": "direct",
-        "kb_comment": "direct",
-        "kb_validate": "direct",
-        "kb_fix": "direct",
-        "kb_automations": "direct"
+        "search": "deferred",
+        "list_repos": "deferred"
+      }
+    },
+    "atlassian": {
+      "command": "uvx",
+      "args": [
+        "mcp-atlassian"
+      ],
+      "env": {
+        "CONFLUENCE_URL": "https://lendo-group.atlassian.net/wiki",
+        "CONFLUENCE_USERNAME": "hampus.adamsson@group.clar.co",
+        "JIRA_URL": "https://lendo-group.atlassian.net",
+        "JIRA_USERNAME": "hampus.adamsson@group.clar.co",
+        "JIRA_PROJECTS_FILTER": "DATA,LGAI,LSRE"
+      },
+      "exposure": "hidden",
+      "toolExposure": {
+        "confluence_add_label": "direct",
+        "confluence_get_page": "direct",
+        "confluence_create_page": "direct",
+        "confluence_move_page": "direct",
+        "confluence_search": "direct",
+        "confluence_update_page_section": "direct",
+        "confluence_get_page_children": "direct",
+        "confluence_update_page": "direct",
+        "confluence_get_space_page_tree": "direct",
+        "jira_search": "direct",
+        "jira_create_issue": "direct",
+        "jira_get_issue": "direct",
+        "jira_update_issue": "direct",
+        "jira_add_comment": "direct",
+        "confluence_add_comment": "direct"
       }
     }
   }

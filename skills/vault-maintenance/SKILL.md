@@ -8,7 +8,7 @@ disable-model-invocation: true
 
 Deep maintenance of `1-wiki/`. Run only when the user explicitly asks. Never on your own initiative.
 
-OKF, approval gate, proposal format and the MCP tool table: `/skill:obsidian` (single source). The vault is reachable only through the `mysharedbrain` MCP — no local files.
+Vault root, OKF, approval gate and proposal format: `/skill:obsidian` (single source).
 
 ## Safety gates
 
@@ -17,13 +17,13 @@ OKF, approval gate, proposal format and the MCP tool table: `/skill:obsidian` (s
 
 ## Tools
 
-mysharedbrain MCP only — see the tool table in `/skill:obsidian`. Scan with `list_notes`, `search_notes`, `get_frontmatter`, `search_by_tag`; link checks with `get_backlinks` / `get_outgoing`; apply with `patch_note`, `append_note`, `set_frontmatter`, `move_note`.
+File tools only: `hypa_read`, `hypa_grep`, `hypa_find`, `hypa_ls`, `edit`, `write`, `mv`.
 
 ## Workflow
 
 ### 1. Scan
 
-Index every page in `1-wiki/` (`list_notes(prefix="1-wiki", limit=...)`, paging until exhausted). Build the entity list: one entity = one page, stable name, no date prefix. Note each page's frontmatter (`get_frontmatter`: `type`, `tags` incl. `status/*`, `resource`, `owner`) and its links (`get_outgoing`), then read bodies only for pages that need a content diff.
+Index every page in `1-wiki/` (`hypa_find`). Build the entity list: one entity = one page, stable name, no date prefix. Note each page's frontmatter (`type`, `tags` incl. `status/*`, `resource`, `owner`), sections, and links.
 
 ### 2. Conflict & dedup check
 
@@ -33,9 +33,9 @@ Index every page in `1-wiki/` (`list_notes(prefix="1-wiki", limit=...)`, paging 
 
 ### 3. Reference check
 
-- **`resource:` frontmatter** — re-read each pointer (repo, table, daily note; daily notes via `read_note`). Diff source against the page. Flag new info, stale info, and changed facts.
+- **`resource:` frontmatter** — re-read each pointer (repo, Confluence page, table, daily note). Diff source against the page. Flag new info, stale info, and changed facts.
 - **`# Links` operational URLs** — verify each still resolves. Flag dead or moved links.
-- **`[[wikilinks]]`** — verify every target exists (resolve each with `search_notes`; `get_backlinks` gives the reverse direction). Flag broken links (propose fixing or unlinking) and orphans (pages with no inbound `[[link]]`).
+- **`[[wikilinks]]`** — verify every target exists. Flag broken links (propose fixing or unlinking) and orphans (pages with no inbound `[[link]]`).
 
 ### 4. Improvements & suggestions
 
@@ -57,11 +57,11 @@ Each item: `<id>. [<action>] <target note> — <one-line reason>` with the exact
 
 ### 6. Apply (selected only)
 
-1. Update content per selection with `patch_note` / `append_note` / `create_note` / `move_note`; timestamp via `set_frontmatter`, plus cross-links per the obsidian gate.
+1. Update content per selection; timestamp and cross-links per the obsidian gate.
 2. Report what changed and what was left.
 
 ## Reference
 
 - `/skill:obsidian` — gate, proposal format
-- Vault spec/tag vocab: `/Users/hampus/.pi/agent/skills/obsidian/references/vault-spec.md`
-- Templates: `/Users/hampus/.pi/agent/skills/obsidian/references/templates.md`
+- Vault spec/tag vocab: `/Users/hampus.adamsson/.pi/agent/skills/obsidian/references/vault-spec.md`
+- Templates: `/Users/hampus.adamsson/.pi/agent/skills/obsidian/references/templates.md`

@@ -14,7 +14,7 @@
 			},
 			"models": [
 				{
-					"id": "lmstudio/mlx-community/Qwen3.5-9B-MLX-4bit",
+					"id": "lmstudio/qwen3.5-9b-mlx",
 					"reasoning": true,
 					"input": [
 						"text"
@@ -43,7 +43,7 @@
 					}
 				},
 				{
-					"id": "lmstudio/mlx-community/Qwen3.8-27B-4bit",
+					"id": "lmstudio/qwen3.8-27b",
 					"reasoning": true,
 					"input": [
 						"text"
@@ -79,9 +79,9 @@
 						"text"
 					],
 					"cost": {
-						"input": 0,
-						"output": 0,
-						"cacheRead": 0,
+						"input": 0.0,
+						"output": 0.0,
+						"cacheRead": 0.0,
 						"cacheWrite": 0
 					},
 					"contextWindow": 1048576,
@@ -179,8 +179,8 @@
 						"text"
 					],
 					"cost": {
-						"input": 2,
-						"output": 10,
+						"input": 2.0,
+						"output": 10.0,
 						"cacheRead": 0.09999999999999999,
 						"cacheWrite": 0
 					},
@@ -304,8 +304,8 @@
 						"text"
 					],
 					"cost": {
-						"input": 2,
-						"output": 6,
+						"input": 2.0,
+						"output": 6.0,
 						"cacheRead": 0.5,
 						"cacheWrite": 0
 					},
@@ -467,7 +467,7 @@
 					],
 					"cost": {
 						"input": 0.95,
-						"output": 4,
+						"output": 4.0,
 						"cacheRead": 0.19,
 						"cacheWrite": 0
 					},
@@ -491,10 +491,10 @@
 						"text"
 					],
 					"cost": {
-						"input": 3,
-						"output": 15,
+						"input": 3.0,
+						"output": 15.0,
 						"cacheRead": 0.3,
-						"cacheWrite": 3
+						"cacheWrite": 3.0
 					},
 					"contextWindow": 1048576,
 					"maxTokens": 131072,
@@ -516,10 +516,10 @@
 						"text"
 					],
 					"cost": {
-						"input": 2,
-						"output": 10,
+						"input": 2.0,
+						"output": 10.0,
 						"cacheRead": 0.19999999999999998,
-						"cacheWrite": 2
+						"cacheWrite": 2.0
 					},
 					"contextWindow": 1048576,
 					"maxTokens": 131072,
@@ -795,8 +795,8 @@
 						"text"
 					],
 					"cost": {
-						"input": 2,
-						"output": 6,
+						"input": 2.0,
+						"output": 6.0,
 						"cacheRead": 0.25,
 						"cacheWrite": 2.5
 					},
@@ -849,7 +849,7 @@
 						"text"
 					],
 					"cost": {
-						"input": 1,
+						"input": 1.0,
 						"output": 2.7,
 						"cacheRead": 0.09999999999999999,
 						"cacheWrite": 0

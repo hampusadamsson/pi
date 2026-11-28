@@ -7,7 +7,7 @@ description: Reconcile the current conversation context (what was just discussed
 
 Takes the current session's context — facts learned, decisions made, problems fixed, commands run, entities touched — and checks it against the vault's canonical pages. Surfaces discrepancies as a numbered list of proposed actions; the user picks which to run.
 
-OKF, approval gate, proposal format and the MCP tool table: `/skill:obsidian` (single source). The vault is reachable only through the `mysharedbrain` MCP — no local files.
+Vault root, OKF, approval gate and proposal format: `/skill:obsidian` (single source).
 
 ## Safety gates
 
@@ -23,7 +23,7 @@ Pull what the current session actually established: entities discussed (tools, s
 
 ### 2. Find relevant vault state
 
-For each extracted entity/fact, locate its canonical page: `search_notes` on titles/terms, `search_by_tag` for tag cohorts, `list_directory` to see a map's contents if there is no obvious hit. One entity = one page — if none exists, note that as a candidate new page, don't assume.
+For each extracted entity/fact, locate its canonical page: `hypa_grep` on titles/tags/body, or `hypa_find`/`hypa_ls` if no obvious hit. One entity = one page — if none exists, note that as a candidate new page, don't assume.
 
 ### 3. Diff
 
@@ -61,13 +61,13 @@ User replies with numbers/ranges (e.g. `1 3`, `2-4`, `all`, `none`). Only apply 
 
 ### 6. Apply selected
 
-1. Apply each selection with the MCP write tools: `create_note` (new), `patch_note` (section edit), `append_note` (extend), `set_frontmatter` (frontmatter-only), `move_note` (move/merge). No file tools — the vault has no local checkout.
-2. Set `timestamp` via `set_frontmatter` and cross-links per the obsidian gate.
+1. Apply each selection with `edit`/`write`.
+2. Set `timestamp` and cross-links per the obsidian gate.
 3. Report what was applied, what was skipped, and what's still open.
 
 ## Reference
 
 - `/skill:obsidian` — gate, proposal format
-- Vault spec/tag vocab: `/Users/hampus/.pi/agent/skills/obsidian/references/vault-spec.md`
-- Templates: `/Users/hampus/.pi/agent/skills/obsidian/references/templates.md`
+- Vault spec/tag vocab: `/Users/hampus.adamsson/.pi/agent/skills/obsidian/references/vault-spec.md`
+- Templates: `/Users/hampus.adamsson/.pi/agent/skills/obsidian/references/templates.md`
 - Related: `/skill:vault-maintenance`

@@ -1,6 +1,6 @@
 # Note Templates
 
-Source: vault `template/` directory (read the live copies with `list_directory("template")` + `read_note`). Use these to create new pages after user approval. Create with `create_note("1-wiki/<realm>/<map>/<name>", content)` — no `.md` suffix in the id; replace `{{date}}` with the actual date in frontmatter.
+Source: vault `template/` directory. Use these to create new pages after user approval. Create with `write` at `1-wiki/<realm>/<map>/<name>.md`; replace `{{date}}` with the actual date in frontmatter.
 
 ## wiki (canonical)
 
@@ -11,7 +11,7 @@ title: ""
 description: ""              # one line, LLM-searchable summary
 tags: [type/reference, status/seedling]
 timestamp: {{date}}
-resource: []                # source-of-truth the agent re-reads to refresh this page (repo, url, daily note). NOT operational links — those go in # Links
+resource: []                # source-of-truth the agent re-reads to refresh this page (repo, Confluence, table, daily note). NOT operational links — those go in # Links
 ---
 
 Short plain-language description of the subject and why it matters.
@@ -61,7 +61,7 @@ title: ""
 description: ""              # one line, LLM-searchable summary
 tags: [type/tool, tool/managed, system/, status/active]
 timestamp: {{date}}
-resource: []                # source-of-truth the agent re-reads to refresh this page (vendor docs, repo). NOT operational links — those go in # Links
+resource: []                # source-of-truth the agent re-reads to refresh this page (vendor docs, repo, Confluence). NOT operational links — those go in # Links
 ---
 
 Short plain-language description of the tool and why we use it.
@@ -109,10 +109,10 @@ Known issues + runbooks. Symptom → cause → fix.
 type: service                # use type/model for ML models
 title: ""
 description: ""
-tags: [type/service, project/, system/, status/active]
+tags: [type/service, market/, system/, status/active]
 timestamp: {{date}}
-owner: me                    # me | self-hosted | third-party
-resource: []                # source-of-truth the agent re-reads to refresh this page (repo, docs url). NOT operational links — those go in # Links
+owner: dml                   # dml | lendo-se | lendo-no | lendo-pfm
+resource: []                # source-of-truth the agent re-reads to refresh this page (repo, Confluence). NOT operational links — those go in # Links
 ---
 
 Short plain-language description of the service.
@@ -139,7 +139,7 @@ Deploy, retrain, debug, call the API — common tasks with a runnable example.
 | What | Link |
 | Repo | [github](url) |
 | Dashboard | [grafana](url) |
-| Docs | [page](url) |
+| Confluence | [page](url) |
 
 # Incidents
 
@@ -147,14 +147,14 @@ Known issues + runbooks. Symptom → cause → fix.
 
 # Depends / Surfaces
 
-- Depends: [[argocd]] [[syncthing]]
+- Depends: [[snowflake]] [[rabbitmq]]
 - Surfaces: [[inbox-se]] [[admin-se]]   (where it renders, if applicable)
 
 # Changelog
 
 Dated entries, newest first. Format: `- YYYY-MM-DD — what changed — source`
 
-- YYYY-MM-DD — what changed — source (PR / docs / daily note)
+- YYYY-MM-DD — what changed — source (PR / Confluence / daily note)
 
 # See also
 

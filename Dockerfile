@@ -3,7 +3,7 @@ FROM node:22-slim
 ARG PI_WEB_VERSION=latest
 
 # git: required by pi package manager for git: packages and npm git deps.
-# curl: required by PI WEB runtime checks.
+# curl: required by PI WEB runtime checks and by the uv installer below.
 # ripgrep + bubblewrap: required by the pi-sandbox extension (sandbox.json).
 RUN apt-get update && \
     apt-get install -y --no-install-recommends git ca-certificates curl ripgrep bubblewrap python3 make g++ && \
@@ -14,6 +14,9 @@ RUN apt-get update && \
     apt-get update && \
     apt-get install -y --no-install-recommends gh && \
     rm -rf /var/lib/apt/lists/*
+
+# uv/uvx: required by MCP servers declared in mcp.json (atlassian uses `uvx`).
+# RUN curl -LsSf https://astral.sh/uv/install.sh | sh
 
 ENV HOME=/root
 ENV PATH="/root/.local/bin:${PATH}"

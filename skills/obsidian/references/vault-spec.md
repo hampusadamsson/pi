@@ -1,6 +1,6 @@
 # Vault Specification
 
-Vault: reachable only through the `mysharedbrain` MCP (see `obsidian/SKILL.md`). Note ids are vault-relative paths without `.md`.
+Vault root: see `obsidian/SKILL.md`.
 
 Max depth 2 under a realm.
 
@@ -17,7 +17,7 @@ Max depth 2 under a realm.
 
 | Map | Holds |
 | --- | --- |
-| `tools/` | Platforms & CLIs you USE. Managed SaaS (`tool/managed`: argocd, grafana) or local CLI (`tool/local`: kubectl, uv, gh). Ref manual per page. |
+| `tools/` | Platforms & CLIs you USE. Managed SaaS (`tool/managed`: argocd, snowflake) or local CLI (`tool/local`: k9s, uv, gh). Ref manual per page. |
 | `services/` | Things WE deploy or integrate: coded services, models, market frontends. `owner:` set. |
 | `platform/` | Architecture, standards, roadmap, RFCs, gitops concept, `.canvas` diagrams. |
 | `howto/` | Cross-tool techniques only. Tool-specific steps go in that tool's page. |
@@ -58,7 +58,7 @@ All variants of `[[wiki]]`. Sections use if applicable; drop what doesn't apply.
 
 Sections: Summary · Install · Auth · How-to · Links · Incidents · Depends · See also.
 
-- CLI + MCP: install in **Install**, credentials/scope in **Auth**, usage in **How-to**. MCP servers are declared in `~/.pi/agent/mcp.json`; local model/LLM routing goes through `[[bifrost]]`.
+- CLI + MCP: install in **Install**, credentials/scope/VPN in **Auth**, usage in **How-to**. MCP config via Ruler (`ruler.toml` → `.claude/.mcp.json`); prod MCP fronted by `[[bifrost]]`.
 
 ### service (`services/`)
 
@@ -83,7 +83,7 @@ description: "Short, LLM-searchable summary"
 tags: [type/reference, status/seedling]
 timestamp: {{date}}
 resource: []   # authoritative source(s) the agent re-reads to update this page
-owner: ""      # services only: me | self-hosted | third-party
+owner: ""      # services only: dml | lendo-se | lendo-no | lendo-pfm (Kreddy)
 ---
 
 Short plain-language description of the subject. [[related-page]]
@@ -98,11 +98,11 @@ No title heading in the body — the filename is the title.
 - `description` — one line, optimised for LLM search.
 - `tags` — hierarchical, from the vocabulary below.
 - `timestamp` — the template shows `{{date}}` as a placeholder for Obsidian's own template-insertion syntax. When the agent creates/edits a page substitute the actual current date (`YYYY-MM-DD`) — never leave the literal string `{{date}}` in a saved note.
-- `resource` — machine-readable pointer(s) to the source of truth the agent reads to refresh this page (repo path, repo URL, source daily note). For the LLM, not humans. String or list. Human/operational URLs (console stage/prod, dashboards) go in the `# Links` section, not here.
+- `resource` — machine-readable pointer(s) to the source of truth the agent reads to refresh this page (repo path, Confluence URL, Snowflake table, source daily note). For the LLM, not humans. String or list. Human/operational URLs (console stage/prod, dashboards) go in the `# Links` section, not here.
 - `# Links` — in-body table of operational URLs for people: console (stage/prod), docs, dashboards.
-- `owner` — services only: who owns the code (`me` = mine, `self-hosted` = runs on my cluster, `third-party` = external SaaS).
+- `owner` — services only: who owns the code (`dml` = ours; `lendo-se`/`lendo-no`/`lendo-pfm` = integrate). Kreddy = `lendo-pfm`.
 
-`owner:` values: `me`, `self-hosted`, `third-party`.
+`owner:` values: `dml`, `lendo-se`, `lendo-no`, `lendo-pfm` (= Kreddy).
 
 ## Writing style
 
@@ -122,7 +122,7 @@ No title heading in the body — the filename is the title.
 
 ## Tag Vocabulary
 
-Use these only. Request approval before adding a new tag. Folders carry domain; tags carry everything cross-cutting (project, system, status).
+Use these only. Request approval before adding a new tag. Folders carry domain; tags carry everything cross-cutting (market, system, status).
 
 ### type/
 
@@ -134,28 +134,21 @@ Use these only. Request approval before adding a new tag. Folders carry domain; 
 
 `status/raw` = not yet processed by the agent.
 
+### market/ (market / business unit)
+
+`market/se`, `market/no`, `market/dk`, `market/kreddy` (Kreddy = `lendo-pfm` org/cluster)
+
 ### tool/ (nature of a tool page)
 
 `tool/managed` (SaaS/platform), `tool/local` (CLI on your machine)
 
 ### system/ (one per tool/service, matches page name)
 
-e.g. `system/argocd`, `system/k3s`, `system/grafana`, `system/syncthing`, `system/mysharedbrain`, `system/github`, `system/bifrost`, `system/pi`, `system/homeassistant`
+e.g. `system/argocd`, `system/gke`, `system/snowflake`, `system/humio`, `system/airflow`, `system/rabbitmq`, `system/confluence`, `system/jira`, `system/github`, `system/pcm`, `system/soc`, `system/irm`, `system/prediction-api`, `system/inbox`, `system/admin`
 
-### project/ (hierarchical: parent + variant)
+### project/ (hierarchical: parent + country/variant)
 
-`project/automaton`, `project/kb`, `project/uipi`, `project/homeserver`, `project/mysharedbrain`, `project/pi`
-
-## Working the vault over MCP
-
-Reads, searches and folder listings are free: `read_note`, `read_notes`, `search_notes`, `search_by_tag`, `list_directory`, `list_notes`, `get_frontmatter`, `get_backlinks`, `get_outgoing`.
-
-Writes are gated by the approval rule: `create_note`, `append_note`, `patch_note`, `set_frontmatter`, `update_note`, `move_note`, `delete_note`, `restore_note`.
-
-- Re-read a pointer in `resource:` with `read_note` / `search_notes` — never assume it is unchanged.
-- Prefer `patch_note(note_id, heading, content)` for section updates; reserve `update_note` for full rewrites.
-- `set_frontmatter(note_id, {timestamp: "YYYY-MM-DD"})` is how you bump `timestamp`; a `null` value deletes a key.
-- Verify a `[[wikilink]]` target with `search_notes` before writing it; check inbound links with `get_backlinks` before renaming.
+`project/pcm` (`/no`, `/se`, `/dk`), `project/irm` (`/no`, `/kreddy`), `project/soc` (`/no`, `/se`), `project/ec`
 
 ## Agent profile
 

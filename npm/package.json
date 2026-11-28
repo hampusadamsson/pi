@@ -3,7 +3,7 @@
   "private": true,
   "dependencies": {
     "@hypabolic/pi-hypa": "^1.2.0",
-    "@juicesharp/rpiv-todo": "^2.15.0",
+    "@juicesharp/rpiv-todo": "^2.16.0",
     "@vanillagreen/pi-session-manager": "^2.0.4",
     "pi-profiles": "^0.1.1",
     "pi-sandbox": "^0.8.2",

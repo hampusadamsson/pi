@@ -1,7 +1,7 @@
 {
-  "defaultModel": "opencode-go/deepseek-v4.1-flash",
-  "defaultProvider": "bifrost",
-  "lastChangelogVersion": "1.6.0",
+  "defaultModel": "claude-sonnet-5-5",
+  "defaultProvider": "vertex-anthropic",
+  "lastChangelogVersion": "1.6.1",
   "packages": [
     "npm:pi-zentui",
     "npm:@hypabolic/pi-hypa",
@@ -12,7 +12,7 @@
     "npm:@juicesharp/rpiv-todo"
   ],
   "theme": "my-theme",
-  "hideThinkingBlock": true,
+  "hideThinkingBlock": false,
   "defaultThinkingLevel": "medium",
   "httpIdleTimeoutMs": 900000,
   "enableInstallTelemetry": false,

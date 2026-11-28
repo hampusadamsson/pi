@@ -241,6 +241,73 @@
         "obsidian"
       ],
       "hidden": true
+    },
+    "jira-ro": {
+      "description": "Read-only Jira",
+      "model": "vertex-anthropic/claude-haiku-5-5",
+      "promptMode": "replace",
+      "systemPrompt": ".",
+      "tools": {
+        "allow": [
+          "mcp__atlassian__jira_search",
+          "mcp__atlassian__jira_get_issue"
+        ]
+      },
+      "skills": [],
+      "hidden": true
+    },
+    "genai": {
+      "description": "Gen AI team researcher: LGAI Jira (board 749), LGA Confluence, lendo-genai GitHub org, lendo-genai-* GCP projects",
+      "model": "vertex-anthropic/claude-sonnet-5-5",
+      "promptMode": "append",
+      "systemPromptFile": "prompts/genai.md",
+      "tools": {
+        "allow": [
+          "edit",
+          "write",
+          "hypa_read",
+          "hypa_grep",
+          "hypa_shell",
+          "hypa_find",
+          "hypa_ls",
+          "codemode",
+          "web_search",
+          "source_check",
+          "fetch_content",
+          "get_search_content",
+          "mcp__atlassian__confluence_add_label",
+          "mcp__atlassian__confluence_get_page",
+          "mcp__atlassian__confluence_create_page",
+          "mcp__atlassian__confluence_move_page",
+          "mcp__atlassian__confluence_search",
+          "mcp__atlassian__confluence_update_page_section",
+          "mcp__atlassian__confluence_get_page_children",
+          "mcp__atlassian__confluence_update_page",
+          "mcp__atlassian__confluence_get_space_page_tree",
+          "mcp__atlassian__jira_search",
+          "mcp__atlassian__jira_create_issue",
+          "mcp__atlassian__jira_get_issue",
+          "mcp__atlassian__jira_update_issue",
+          "mcp__atlassian__jira_add_comment",
+          "mcp__atlassian__confluence_add_comment",
+          "mcp__humio__search",
+          "mcp__humio__list_repos",
+          "mcp__snowflake__run_snowflake_query"
+        ]
+      },
+      "skills": [
+        "jira",
+        "confluence",
+        "github",
+        "obsidian",
+        "snowflake",
+        "vault-daily-raw",
+        "vault-maintenance",
+        "humio",
+        "sync-vault-context",
+        "genai-weekly"
+      ],
+      "hidden": false
     }
   }
 }
